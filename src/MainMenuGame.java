@@ -1,5 +1,4 @@
 import javax.swing.*;
-import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
@@ -18,10 +17,10 @@ public class MainMenuGame extends JFrame {
     // Deklarasi Global Panel Menu
     private JPanel menuBox;
     private JPanel optionsBox;
-    private JPanel loadBox; // Panel baru untuk halaman Load Game
+    private JPanel loadBox;
     private BackgroundPanel mainPanel;
 
-    private boolean isOverlayOpen = false; // Flag untuk menyembunyikan judul utama saat halaman overlay terbuka
+    private boolean isOverlayOpen = false;
     private Clip backgroundMusic;
 
     // Deklarasi Komponen Video & Audio
@@ -32,7 +31,6 @@ public class MainMenuGame extends JFrame {
     private JSlider musicSlider;
     private JSlider sfxSlider;
 
-    // Tombol Slot Save agar teksnya bisa di-update dinamis
     private JButton slot1Btn, slot2Btn, slot3Btn;
 
     // === STATE PROGRES GAME ===
@@ -45,17 +43,19 @@ public class MainMenuGame extends JFrame {
         setLocationRelativeTo(null);
         setResizable(false);
 
+        // Path langsung diarahkan ke folder img
         try {
-            backgroundImage = ImageIO.read(new File("background.jpg"));
+            backgroundImage = ImageIO.read(new File("assets/img/background.jpg"));
         } catch (Exception e) {
-            System.out.println("Gagal memuat background.jpg, menggunakan warna fallback.");
+            System.out.println("Gagal memuat background.jpg di folder assets/img/");
         }
 
         masterSlider = createStyledSlider(75);
         musicSlider = createStyledSlider(75);
         sfxSlider = createStyledSlider(75);
 
-        playBackgroundMusic("Medieval Ambient Music (Crossing the Withered Vale).wav");
+        // Path langsung diarahkan ke folder music
+        playBackgroundMusic("assets/music/StarCraft II - Terran Theme 01.wav");
 
         mainPanel = new BackgroundPanel();
         mainPanel.setLayout(null);
@@ -63,7 +63,6 @@ public class MainMenuGame extends JFrame {
 
         setupKeyBindings();
 
-        // Menyusun Panel Navigasi
         menuBox = createMenuBox();
         mainPanel.add(menuBox);
 
@@ -78,7 +77,6 @@ public class MainMenuGame extends JFrame {
         applyVideoSettings();
     }
 
-    // PROSEDUR MODULAR: Shortcut Keyboard
     private void setupKeyBindings() {
         mainPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ESCAPE"), "minimizeGame");
         mainPanel.getActionMap().put("minimizeGame", new AbstractAction() {
@@ -88,10 +86,6 @@ public class MainMenuGame extends JFrame {
             }
         });
     }
-
-    // ==========================================
-    // LOGIKA FILE I/O (SAVE & LOAD STATE)
-    // ==========================================
 
     public void saveGameData(int slot) {
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("heart_save_" + slot + ".dat"))) {
@@ -120,10 +114,6 @@ public class MainMenuGame extends JFrame {
         slot2Btn.setText(new File("heart_save_2.dat").exists() ? "SAVE SLOT 2  [ DATA FOUND ]" : "SAVE SLOT 2  [ EMPTY ]");
         slot3Btn.setText(new File("heart_save_3.dat").exists() ? "SAVE SLOT 3  [ DATA FOUND ]" : "SAVE SLOT 3  [ EMPTY ]");
     }
-
-    // ==========================================
-    // LOGIKA AUDIO & DISPLAY BAGAIMANA ADANYA
-    // ==========================================
 
     private float calculateGain(float sliderValue, float masterValue) {
         if (sliderValue == 0 || masterValue == 0) return -80.0f;
@@ -204,13 +194,9 @@ public class MainMenuGame extends JFrame {
 
         setVisible(true);
         optionsBox.setBounds(0, 0, getWidth(), getHeight());
-        loadBox.setBounds(0, 0, getWidth(), getHeight()); // Sync ukuran overlay load
+        loadBox.setBounds(0, 0, getWidth(), getHeight());
         menuBox.setBounds(getWidth() - 350, (getHeight() - 460) / 2, 280, 460);
     }
-
-    // ==========================================
-    // UI MENU UTAMA & OVERLAY PANELS
-    // ==========================================
 
     private class BackgroundPanel extends JPanel {
         @Override
@@ -275,7 +261,6 @@ public class MainMenuGame extends JFrame {
         return panel;
     }
 
-    // TAMPILAN BARU: Halaman Load Game
     private JPanel createLoadBox() {
         JPanel panel = new JPanel() {
             @Override
@@ -297,7 +282,6 @@ public class MainMenuGame extends JFrame {
         panel.add(title);
         panel.add(Box.createRigidArea(new Dimension(0, 60)));
 
-        // Inisialisasi Tombol Slot
         slot1Btn = createSlotButton(1);
         slot2Btn = createSlotButton(2);
         slot3Btn = createSlotButton(3);
@@ -332,7 +316,6 @@ public class MainMenuGame extends JFrame {
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(title); panel.add(Box.createRigidArea(new Dimension(0, 50)));
 
-        // ... (Kode Display & Audio dari sebelumnya tetap utuh)
         JLabel dLabel = new JLabel("✦ GRAPHICS & DISPLAY ✦");
         dLabel.setFont(new Font("Serif", Font.BOLD, 18)); dLabel.setForeground(new Color(170, 150, 120));
         dLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -392,7 +375,6 @@ public class MainMenuGame extends JFrame {
         return cb;
     }
 
-    // Navigasi Transisi ke GamePanel
     private void openGameplay() {
         GamePanel gamePanel = new GamePanel(MainMenuGame.this);
         setContentPane(gamePanel);
@@ -401,7 +383,6 @@ public class MainMenuGame extends JFrame {
         gamePanel.requestFocusInWindow();
     }
 
-    // Tombol Khusus untuk Slot Save
     private JButton createSlotButton(int slotIndex) {
         JButton button = new JButton("SAVE SLOT " + slotIndex) {
             @Override
@@ -427,8 +408,9 @@ public class MainMenuGame extends JFrame {
         button.setMaximumSize(new Dimension(400, 55));
         button.setFocusPainted(false); button.setBorderPainted(false); button.setContentAreaFilled(false);
 
+        // Path langsung diarahkan ke folder music
         button.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent evt) { playHoverSound("342200__christopherderp__videogame-menu-button-click.wav"); }
+            public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); }
         });
 
         button.addActionListener(e -> {
@@ -467,14 +449,15 @@ public class MainMenuGame extends JFrame {
         button.setMaximumSize(new Dimension(230, 42));
         button.setFocusPainted(false); button.setBorderPainted(false); button.setContentAreaFilled(false);
 
+        // Path langsung diarahkan ke folder music
         button.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent evt) { playHoverSound("342200__christopherderp__videogame-menu-button-click.wav"); }
+            public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); }
         });
 
         button.addActionListener(e -> {
             switch (text) {
                 case "CONTINUE":
-                    updateLoadBoxUI(); // Cek status file sebelum halaman muncul
+                    updateLoadBoxUI();
                     isOverlayOpen = true;
                     menuBox.setVisible(false);
                     loadBox.setVisible(true);
@@ -503,9 +486,6 @@ public class MainMenuGame extends JFrame {
         return button;
     }
 
-    // ==========================================
-    // KELAS MODULAR: HALAMAN GAMEPLAY (RTS MODE)
-    // ==========================================
     private class GamePanel extends JPanel {
         private MainMenuGame frame;
         private BufferedImage gameplayBg;
@@ -525,10 +505,13 @@ public class MainMenuGame extends JFrame {
             this.frame = frame;
             setLayout(new BorderLayout());
 
+            // Path langsung diarahkan ke folder img
             try {
-                gameplayBg = ImageIO.read(new File("bg.png"));
-                houseImage = ImageIO.read(new File("house_h&h.png"));
-            } catch (Exception e) {}
+                gameplayBg = ImageIO.read(new File("assets/img/bg.png"));
+                houseImage = ImageIO.read(new File("assets/img/house_h&h.png"));
+            } catch (Exception e) {
+                System.out.println("Gagal memuat visual game panel di folder assets/img/");
+            }
 
             getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_B, 0), "toolBuild");
             getActionMap().put("toolBuild", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.BUILD; holdingHouse = null; repaint(); }});
@@ -569,7 +552,7 @@ public class MainMenuGame extends JFrame {
                     if (currentTool == ToolMode.BUILD) {
                         if (!isOverlapping(newArea, null)) {
                             frame.savedHouses.add(newArea);
-                            frame.playHoverSound("342200__christopherderp__videogame-menu-button-click.wav");
+                            frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                         }
                     }
                     else if (currentTool == ToolMode.MOVE) {
@@ -577,7 +560,7 @@ public class MainMenuGame extends JFrame {
                             for (int i = frame.savedHouses.size() - 1; i >= 0; i--) {
                                 if (frame.savedHouses.get(i).contains(e.getPoint())) {
                                     holdingHouse = frame.savedHouses.remove(i);
-                                    frame.playHoverSound("342200__christopherderp__videogame-menu-button-click.wav");
+                                    frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                                     break;
                                 }
                             }
@@ -585,7 +568,7 @@ public class MainMenuGame extends JFrame {
                             if (!isOverlapping(newArea, holdingHouse)) {
                                 frame.savedHouses.add(newArea);
                                 holdingHouse = null;
-                                frame.playHoverSound("342200__christopherderp__videogame-menu-button-click.wav");
+                                frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                             }
                         }
                     }
@@ -593,7 +576,7 @@ public class MainMenuGame extends JFrame {
                         for (int i = frame.savedHouses.size() - 1; i >= 0; i--) {
                             if (frame.savedHouses.get(i).contains(e.getPoint())) {
                                 frame.savedHouses.remove(i);
-                                frame.playHoverSound("342200__christopherderp__videogame-menu-button-click.wav");
+                                frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                                 break;
                             }
                         }
@@ -602,7 +585,6 @@ public class MainMenuGame extends JFrame {
                 }
             });
 
-            // COMMAND CARD BAWAH
             JPanel commandCard = new JPanel() {
                 @Override
                 protected void paintComponent(Graphics g) {
@@ -629,7 +611,6 @@ public class MainMenuGame extends JFrame {
             actionPanel.add(createRTSButton("MOVE (M)", ToolMode.MOVE));
             actionPanel.add(createRTSButton("DELETE (X)", ToolMode.DELETE));
 
-            // FITUR BARU: Tombol Save saat main
             JButton btnSave = createRTSButton("SAVE (S)", ToolMode.NONE);
             btnSave.addActionListener(e -> {
                 String[] options = {"Slot 1", "Slot 2", "Slot 3"};
@@ -637,7 +618,7 @@ public class MainMenuGame extends JFrame {
                         JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 
                 if (choice >= 0) {
-                    frame.saveGameData(choice + 1); // Indeks array mulai dari 0, file mulai dari 1
+                    frame.saveGameData(choice + 1);
                 }
             });
             actionPanel.add(btnSave);
