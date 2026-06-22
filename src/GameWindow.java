@@ -23,6 +23,16 @@ public class GameWindow extends JFrame {
         setLocationRelativeTo(null);
         setResizable(false);
 
+        // --- KODE IKON APLIKASI ---
+        try {
+            // Mengambil gambar langsung dari path relatif assets/img/
+            Image iconImage = new ImageIcon("assets/img/app_icon.png").getImage();
+            this.setIconImage(iconImage);
+        } catch (Exception e) {
+            System.out.println("Gagal load icon: " + e.getMessage());
+        }
+        // ---------------------------
+
         // Inisialisasi CardLayout (Sistem tumpukan layar)
         cardLayout = new CardLayout();
         mainContainer = new JPanel(cardLayout);

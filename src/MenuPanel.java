@@ -10,7 +10,9 @@ import javax.sound.sampled.*;
 public class MenuPanel extends JPanel {
     private GameWindow window; // Referensi ke Bos
     private BufferedImage backgroundImage;
-    private Clip backgroundMusic;
+
+    // 1. DIUBAH MENJADI STATIC AGAR MUSIK PERSISTEN DI MEMORI
+    private static Clip backgroundMusic;
 
     // Kotak-kotak Menu
     private JPanel menuBox;
@@ -43,7 +45,7 @@ public class MenuPanel extends JPanel {
         musicSlider = createStyledSlider(75);
         sfxSlider = createStyledSlider(75);
 
-        playBackgroundMusic("assets/music/StarCraft II - Terran Theme 01.wav");
+        playBackgroundMusic("assets/music/Medieval Ambient Music (Crossing the Withered Vale).wav");
 
         // Buat 3 kotak menu
         menuBox = createMenuBox();
@@ -57,13 +59,19 @@ public class MenuPanel extends JPanel {
         loadBox.setVisible(false);
         add(loadBox);
 
-        // Resize Listener agar menu selalu di tengah
+        // Resize & State Listener agar menu selalu di tengah dan musik terpantau
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
                 menuBox.setBounds(getWidth() - 350, (getHeight() - 460) / 2, 280, 460);
                 optionsBox.setBounds(0, 0, getWidth(), getHeight());
                 loadBox.setBounds(0, 0, getWidth(), getHeight());
+            }
+
+            @Override
+            public void componentShown(ComponentEvent e) {
+                // 2. KETIKA KEMBALI DARI GAMEPLAY KE MENU (CardLayout berganti), MUSIK AKAN OTOMATIS DI-RESUME
+                playBackgroundMusic("assets/music/Medieval Ambient Music (Crossing the Withered Vale).wav");
             }
         });
     }
@@ -86,7 +94,17 @@ public class MenuPanel extends JPanel {
         }
     }
 
+    // 3. REVISI LOGIKA PENGECEKAN PINTAR AGAR TIDAK MENUMPUK ATAU MENGULANG LAGU
     private void playBackgroundMusic(String filePath) {
+        if (backgroundMusic != null) {
+            // Jika musik sudah ada tapi sedang berhenti (misal habis keluar dari gameplay), langsung mainkan lagi
+            if (!backgroundMusic.isRunning()) {
+                backgroundMusic.loop(Clip.LOOP_CONTINUOUSLY);
+                backgroundMusic.start();
+            }
+            return; // Keluar dari fungsi, jangan muat ulang file agar tidak restart dari detik 0
+        }
+
         try {
             File musicPath = new File(filePath);
             if (musicPath.exists()) {
