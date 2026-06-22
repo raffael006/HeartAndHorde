@@ -7,6 +7,7 @@ import java.util.List;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import javax.sound.sampled.*;
+import javax.swing.Timer;
 
 public class MainMenuGame extends JFrame {
 
@@ -34,7 +35,7 @@ public class MainMenuGame extends JFrame {
     private JButton slot1Btn, slot2Btn, slot3Btn;
 
     // === STATE PROGRES GAME ===
-    public List<Rectangle> savedHouses = new ArrayList<>();
+    public List<Building> savedBuildings = new ArrayList<>();
 
     public MainMenuGame() {
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");
@@ -89,7 +90,7 @@ public class MainMenuGame extends JFrame {
 
     public void saveGameData(int slot) {
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("heart_save_" + slot + ".dat"))) {
-            oos.writeObject(savedHouses);
+            oos.writeObject(savedBuildings);
             JOptionPane.showMessageDialog(this, "Progress kota berhasil disimpan di Slot " + slot + "!", "Save Success", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             System.out.println("Gagal menyimpan game: " + e.getMessage());
@@ -101,7 +102,7 @@ public class MainMenuGame extends JFrame {
         if (!file.exists()) return false;
 
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-            savedHouses = (List<Rectangle>) ois.readObject();
+            savedBuildings = (List<Building>) ois.readObject();
             return true;
         } catch (Exception e) {
             System.out.println("Gagal memuat game: " + e.getMessage());
@@ -465,7 +466,7 @@ public class MainMenuGame extends JFrame {
                     break;
                 case "CAMPAIGN":
                     System.out.println("Memulai Campaign Baru (Reset Data)...");
-                    savedHouses.clear();
+                    savedBuildings.clear();
                     openGameplay();
                     break;
                 case "OPTIONS":
@@ -491,21 +492,86 @@ public class MainMenuGame extends JFrame {
         private BufferedImage gameplayBg;
         private BufferedImage houseImage;
 
+        private Camera camera = new Camera();
+
+        // --- Tambahkan di bawah private final int PAN_SPEED = 20; ---
+        private boolean wPressed = false;
+        private boolean sPressed = false;
+        private boolean aPressed = false;
+        private boolean dPressed = false;
+        private Timer cameraTimer;
+
         private enum ToolMode { NONE, BUILD, MOVE, DELETE }
         private ToolMode currentTool = ToolMode.NONE;
 
         private int mouseX = -100;
         private int mouseY = -100;
-        private Rectangle holdingHouse = null;
+        private Building holdingBuilding = null;
 
         private final int houseWidth = 90;
         private final int houseHeight = 90;
 
+        // Tambahkan di bawah private final int houseHeight = 90;
+        private JPanel bottomLeftBar;
+        private JPanel topRightBar;
+        private JButton menuBtn;
+
+
+
+
+
         public GamePanel(MainMenuGame frame) {
             this.frame = frame;
-            setLayout(new BorderLayout());
+            setLayout(null);
 
-            // Path langsung diarahkan ke folder img
+            cameraTimer = new Timer(16, new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    // Cukup suruh kamera bergerak, lalu cek apakah dia benar-benar bergeser
+                    boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
+                    if (moved) repaint();
+                }
+            });
+            cameraTimer.start(); // Nyalakan mesinnya
+
+
+
+
+            // --- Logika Zoom (Ctrl + Scroll) dengan Anchor Tengah ---
+            addMouseWheelListener(e -> {
+                if (e.isControlDown()) {
+                    camera.zoomInOut(e.getWheelRotation(), getWidth(), getHeight());
+                    repaint();
+                }
+            });
+
+            // --- Logika Pan/Geser (WASD - Mulus & Anti Hilang Fokus) ---
+            // W Key (Ditekan & Dilepas)
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_W, 0, false), "wPress");
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_W, 0, true), "wRelease");
+            getActionMap().put("wPress", new AbstractAction() { public void actionPerformed(ActionEvent e) { wPressed = true; }});
+            getActionMap().put("wRelease", new AbstractAction() { public void actionPerformed(ActionEvent e) { wPressed = false; }});
+
+            // S Key (Ditekan & Dilepas)
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_S, 0, false), "sPress");
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_S, 0, true), "sRelease");
+            getActionMap().put("sPress", new AbstractAction() { public void actionPerformed(ActionEvent e) { sPressed = true; }});
+            getActionMap().put("sRelease", new AbstractAction() { public void actionPerformed(ActionEvent e) { sPressed = false; }});
+
+            // A Key (Ditekan & Dilepas)
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_A, 0, false), "aPress");
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_A, 0, true), "aRelease");
+            getActionMap().put("aPress", new AbstractAction() { public void actionPerformed(ActionEvent e) { aPressed = true; }});
+            getActionMap().put("aRelease", new AbstractAction() { public void actionPerformed(ActionEvent e) { aPressed = false; }});
+
+            // D Key (Ditekan & Dilepas)
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_D, 0, false), "dPress");
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_D, 0, true), "dRelease");
+            getActionMap().put("dPress", new AbstractAction() { public void actionPerformed(ActionEvent e) { dPressed = true; }});
+            getActionMap().put("dRelease", new AbstractAction() { public void actionPerformed(ActionEvent e) { dPressed = false; }});
+
+
+
             try {
                 gameplayBg = ImageIO.read(new File("assets/img/bg.png"));
                 houseImage = ImageIO.read(new File("assets/img/house_h&h.png"));
@@ -514,18 +580,22 @@ public class MainMenuGame extends JFrame {
             }
 
             getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_B, 0), "toolBuild");
-            getActionMap().put("toolBuild", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.BUILD; holdingHouse = null; repaint(); }});
+            getActionMap().put("toolBuild", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.BUILD; holdingBuilding = null; repaint(); }});
 
             getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_M, 0), "toolMove");
             getActionMap().put("toolMove", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.MOVE; repaint(); }});
 
             getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_X, 0), "toolDelete");
-            getActionMap().put("toolDelete", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.DELETE; holdingHouse = null; repaint(); }});
+            getActionMap().put("toolDelete", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); }});
 
             addMouseMotionListener(new MouseAdapter() {
                 @Override
                 public void mouseMoved(MouseEvent e) {
-                    mouseX = e.getX(); mouseY = e.getY();
+                    // Terjemahkan dulu posisi X dan Y layar ke dunia game
+                    Point worldPos = camera.toWorld(e.getX(), e.getY());
+                    mouseX = worldPos.x;
+                    mouseY = worldPos.y;
+
                     if (currentTool != ToolMode.NONE) repaint();
                 }
             });
@@ -533,10 +603,17 @@ public class MainMenuGame extends JFrame {
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {
+                    // Cegah klik nembus ke tanah kalau lagi klik UI
+                    if (bottomLeftBar != null && topRightBar != null) {
+                        if (bottomLeftBar.getBounds().contains(e.getPoint()) || topRightBar.getBounds().contains(e.getPoint())) {
+                            return;
+                        }
+                    }
+
                     if (SwingUtilities.isRightMouseButton(e)) {
-                        if (holdingHouse != null) {
-                            frame.savedHouses.add(holdingHouse);
-                            holdingHouse = null;
+                        if (holdingBuilding != null) {
+                            frame.savedBuildings.add(holdingBuilding);
+                            holdingBuilding = null;
                         }
                         currentTool = ToolMode.NONE;
                         repaint();
@@ -545,37 +622,39 @@ public class MainMenuGame extends JFrame {
 
                     if (!SwingUtilities.isLeftMouseButton(e)) return;
 
-                    int targetX = e.getX() - (houseWidth / 2);
-                    int targetY = e.getY() - (houseHeight / 2);
+                    Point worldPos = camera.toWorld(e.getX(), e.getY());
+
+                    int targetX = worldPos.x - (houseWidth / 2);
+                    int targetY = worldPos.y - (houseHeight / 2);
                     Rectangle newArea = new Rectangle(targetX, targetY, houseWidth, houseHeight);
 
                     if (currentTool == ToolMode.BUILD) {
                         if (!isOverlapping(newArea, null)) {
-                            frame.savedHouses.add(newArea);
+                            frame.savedBuildings.add(new Building(targetX, targetY, houseWidth, houseHeight));
                             frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                         }
                     }
                     else if (currentTool == ToolMode.MOVE) {
-                        if (holdingHouse == null) {
-                            for (int i = frame.savedHouses.size() - 1; i >= 0; i--) {
-                                if (frame.savedHouses.get(i).contains(e.getPoint())) {
-                                    holdingHouse = frame.savedHouses.remove(i);
+                        if (holdingBuilding == null) {
+                            for (int i = frame.savedBuildings.size() - 1; i >= 0; i--) {
+                                if (frame.savedBuildings.get(i).contains(worldPos)) {
+                                    holdingBuilding = frame.savedBuildings.remove(i);
                                     frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                                     break;
                                 }
                             }
                         } else {
-                            if (!isOverlapping(newArea, holdingHouse)) {
-                                frame.savedHouses.add(newArea);
-                                holdingHouse = null;
+                            if (!isOverlapping(newArea, holdingBuilding)) {
+                                frame.savedBuildings.add(new Building(targetX, targetY, houseWidth, houseHeight));
+                                holdingBuilding = null;
                                 frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                             }
                         }
                     }
                     else if (currentTool == ToolMode.DELETE) {
-                        for (int i = frame.savedHouses.size() - 1; i >= 0; i--) {
-                            if (frame.savedHouses.get(i).contains(e.getPoint())) {
-                                frame.savedHouses.remove(i);
+                        for (int i = frame.savedBuildings.size() - 1; i >= 0; i--) {
+                            if (frame.savedBuildings.get(i).contains(worldPos)) {
+                                frame.savedBuildings.remove(i);
                                 frame.playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav");
                                 break;
                             }
@@ -585,63 +664,35 @@ public class MainMenuGame extends JFrame {
                 }
             });
 
-            JPanel commandCard = new JPanel() {
+            setupHUD();
+
+            // Supaya UI tetap nempel di pojok saat ganti resolusi
+            addComponentListener(new ComponentAdapter() {
                 @Override
-                protected void paintComponent(Graphics g) {
-                    Graphics2D g2d = (Graphics2D) g;
-                    g2d.setColor(new Color(15, 12, 10, 230));
-                    g2d.fillRect(0, 0, getWidth(), getHeight());
-                    g2d.setColor(new Color(130, 85, 45));
-                    g2d.setStroke(new BasicStroke(3f));
-                    g2d.drawLine(0, 0, getWidth(), 0);
-                }
-            };
-            commandCard.setPreferredSize(new Dimension(frame.getWidth(), 110));
-            commandCard.setLayout(new BorderLayout());
-
-            JLabel infoLabel = new JLabel("  HEART & HORDE : CRYONIA SETTLEMENT  ");
-            infoLabel.setFont(new Font("Georgia", Font.BOLD, 18));
-            infoLabel.setForeground(new Color(200, 160, 90));
-            commandCard.add(infoLabel, BorderLayout.WEST);
-
-            JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 25));
-            actionPanel.setOpaque(false);
-
-            actionPanel.add(createRTSButton("BUILD (B)", ToolMode.BUILD));
-            actionPanel.add(createRTSButton("MOVE (M)", ToolMode.MOVE));
-            actionPanel.add(createRTSButton("DELETE (X)", ToolMode.DELETE));
-
-            JButton btnSave = createRTSButton("SAVE (S)", ToolMode.NONE);
-            btnSave.addActionListener(e -> {
-                String[] options = {"Slot 1", "Slot 2", "Slot 3"};
-                int choice = JOptionPane.showOptionDialog(frame, "Pilih Slot Penyimpanan:", "Save Progress",
-                        JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
-
-                if (choice >= 0) {
-                    frame.saveGameData(choice + 1);
+                public void componentResized(ComponentEvent e) {
+                    int w = getWidth();
+                    int h = getHeight();
+                    if(topRightBar != null && bottomLeftBar != null) {
+                        topRightBar.setBounds(w - 600, 0, 600, 50);
+                        menuBtn.setBounds(topRightBar.getWidth() - 40, 10, 30, 30);
+                        bottomLeftBar.setBounds(0, h - 100, 240, 100);
+                    }
                 }
             });
-            actionPanel.add(btnSave);
-
-            JButton btnMenu = createRTSButton("MAIN MENU", ToolMode.NONE);
-            btnMenu.addActionListener(e -> {
-                if (holdingHouse != null) frame.savedHouses.add(holdingHouse);
-                frame.setContentPane(frame.mainPanel);
-                frame.revalidate(); frame.repaint();
-            });
-            actionPanel.add(btnMenu);
-
-            commandCard.add(actionPanel, BorderLayout.EAST);
-            add(commandCard, BorderLayout.SOUTH);
         }
 
-        private boolean isOverlapping(Rectangle newRect, Rectangle ignoreRect) {
-            for (Rectangle h : frame.savedHouses) {
-                if (h != ignoreRect && newRect.intersects(h)) return true;
+
+
+
+
+
+
+        private boolean isOverlapping(Rectangle newRect, Building ignoreBuilding) {
+            for (Building b : frame.savedBuildings) {
+                if (b != ignoreBuilding && b.intersects(newRect)) return true;
             }
             return false;
         }
-
         private JButton createRTSButton(String text, ToolMode modeAction) {
             JButton btn = new JButton(text) {
                 @Override
@@ -672,35 +723,195 @@ public class MainMenuGame extends JFrame {
 
             if (modeAction != ToolMode.NONE) {
                 btn.addActionListener(e -> {
-                    if (holdingHouse != null) { frame.savedHouses.add(holdingHouse); holdingHouse = null; }
+                    if (holdingBuilding != null) { frame.savedBuildings.add(holdingBuilding); holdingBuilding = null; }
                     currentTool = modeAction; repaint();
                 });
             }
             return btn;
         }
 
+
+        private void setupHUD() {
+
+            // HUD KANAN ATAS
+            topRightBar = new JPanel() {
+                protected void paintComponent(Graphics g) {
+                    g.setColor(new Color(30, 25, 45, 240));
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                }
+            };
+            topRightBar.setLayout(null); topRightBar.setOpaque(false);
+
+            // Dummy Indikator Ekonomi
+            String[] stats = {"😊 100", "🍖 500", "💧 300", "💰 1250", "📜 5%"};
+            int statX = 20;
+            for (String s : stats) {
+                JLabel l = new JLabel(s); l.setForeground(Color.WHITE);
+                l.setFont(new Font("Segoe UI Emoji", Font.BOLD, 16));
+                l.setBounds(statX, 10, 100, 30); topRightBar.add(l); statX += 100;
+            }
+
+            // Tombol Menu Putih
+            menuBtn = new JButton() {
+                protected void paintComponent(Graphics g) { g.setColor(Color.WHITE); g.fillRect(0, 0, getWidth(), getHeight()); }
+            };
+            menuBtn.setContentAreaFilled(false); menuBtn.setBorderPainted(false);
+            menuBtn.addActionListener(e -> showInGameMenu());
+            topRightBar.add(menuBtn); add(topRightBar);
+
+            // HUD KIRI BAWAH
+            bottomLeftBar = new JPanel() {
+                protected void paintComponent(Graphics g) { g.setColor(new Color(30, 25, 45, 240)); g.fillRect(0, 0, getWidth(), getHeight()); }
+            };
+            bottomLeftBar.setLayout(null); bottomLeftBar.setOpaque(false);
+
+            JButton buildBtn = createColorButton(new Color(110, 55, 25), ToolMode.BUILD, "🔨");
+            buildBtn.setBounds(15, 25, 50, 50);
+            buildBtn.addActionListener(e -> { currentTool = ToolMode.BUILD; holdingBuilding = null; repaint(); });
+            bottomLeftBar.add(buildBtn);
+
+            JButton moveBtn = createColorButton(new Color(100, 150, 255), ToolMode.MOVE, "✋");
+            moveBtn.setBounds(75, 25, 20, 20);
+            moveBtn.addActionListener(e -> { currentTool = ToolMode.MOVE; repaint(); });
+            bottomLeftBar.add(moveBtn);
+
+            JButton removeBtn = createColorButton(new Color(200, 50, 50), ToolMode.DELETE, "❌");
+            removeBtn.setBounds(75, 55, 20, 20);
+            removeBtn.addActionListener(e -> { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); });
+            bottomLeftBar.add(removeBtn);
+
+            JButton defBtn = createCircleButton(new Color(100, 100, 120), "🛡️");
+            defBtn.setBounds(110, 30, 40, 40);
+            bottomLeftBar.add(defBtn);
+
+            JButton atkBtn = createCircleButton(new Color(150, 50, 50), "⚔️");
+            atkBtn.setBounds(170, 30, 40, 40);
+            bottomLeftBar.add(atkBtn);
+
+
+            add(bottomLeftBar);
+            repaint();
+        }
+
+
+
+        private JButton createColorButton(Color baseColor, ToolMode mode, String icon) {
+            JButton btn = new JButton(icon) {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2d = (Graphics2D) g.create();
+                    g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                    Color topColor = getModel().isRollover() ? baseColor.brighter() : baseColor;
+                    Color botColor = getModel().isRollover() ? baseColor : baseColor.darker().darker();
+                    g2d.setPaint(new GradientPaint(0, 0, topColor, 0, getHeight(), botColor));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+
+                    g2d.setColor(new Color(255, 255, 255, 80));
+                    g2d.drawRoundRect(1, 1, getWidth()-3, getHeight()-3, 6, 6);
+                    g2d.setColor(new Color(0, 0, 0, 100));
+                    g2d.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 6, 6);
+
+                    if (currentTool == mode && mode != ToolMode.NONE) {
+                        g2d.setColor(new Color(255, 215, 0));
+                        g2d.setStroke(new BasicStroke(3));
+                        g2d.drawRoundRect(1, 1, getWidth()-2, getHeight()-2, 6, 6);
+                    }
+
+                    g2d.setColor(Color.WHITE);
+                    g2d.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 18));
+                    FontMetrics fm = g2d.getFontMetrics();
+                    g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+
+                    g2d.dispose();
+                }
+            };
+            btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+            return btn;
+        }
+
+        private JButton createCircleButton(Color baseColor, String icon) {
+            JButton btn = new JButton(icon) {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2d = (Graphics2D) g.create();
+                    g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                    Color topColor = getModel().isRollover() ? baseColor : baseColor.darker();
+                    g2d.setPaint(new GradientPaint(0, 0, topColor, 0, getHeight(), baseColor.darker().darker()));
+                    g2d.fillOval(0, 0, getWidth()-1, getHeight()-1);
+
+                    g2d.setColor(new Color(255, 255, 255, 100));
+                    g2d.drawOval(1, 1, getWidth()-3, getHeight()-3);
+
+                    g2d.setColor(Color.WHITE);
+                    g2d.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
+                    FontMetrics fm = g2d.getFontMetrics();
+                    g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+
+                    g2d.dispose();
+                }
+            };
+            btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+            return btn;
+        }
+
+        private void showInGameMenu() {
+            JPopupMenu popup = new JPopupMenu();
+            JMenuItem saveItem = new JMenuItem("Save Progress");
+            JMenuItem mainMenuItem = new JMenuItem("Back to Main Menu");
+
+            saveItem.addActionListener(e -> {
+                String[] options = {"Slot 1", "Slot 2", "Slot 3"};
+                int choice = JOptionPane.showOptionDialog(frame, "Pilih Slot Penyimpanan:", "Save Progress", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                if (choice >= 0) frame.saveGameData(choice + 1);
+            });
+            mainMenuItem.addActionListener(e -> {
+                if (holdingBuilding != null) frame.savedBuildings.add(holdingBuilding);
+                frame.setContentPane(frame.mainPanel); frame.revalidate(); frame.repaint();
+            });
+
+            popup.add(saveItem); popup.addSeparator(); popup.add(mainMenuItem);
+            popup.show(this, getWidth() / 2 - 75, getHeight() / 2 - 50);
+        }
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            Graphics2D g2d = (Graphics2D) g;
 
-            if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, getWidth(), getHeight(), null);
-            else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, getWidth(), getHeight()); }
+            // 1. Jalankan kalkulasi pembatas kamera
+            camera.clamp(getWidth(), getHeight(), 3000, 2000);
 
-            for (Rectangle h : frame.savedHouses) {
-                if (houseImage != null) g2d.drawImage(houseImage, h.x, h.y, h.width, h.height, null);
-                else { g2d.setColor(new Color(140, 70, 40)); g2d.fillRect(h.x, h.y, h.width, h.height); }
+            // 2. Kloning Kuas (WAJIB: agar bar HUD di layar tidak ikut ke-zoom/kegeser)
+            Graphics2D g2d = (Graphics2D) g.create();
+
+            // 3. Terapkan posisi dan zoom kamera
+            camera.applyTransform(g2d);
+
+            // 4. Render Background Dunia
+            if (gameplayBg != null) {
+                g2d.drawImage(gameplayBg, 0, 0, 3000, 2000, null);
+            } else {
+                g2d.setColor(new Color(30, 50, 30));
+                g2d.fillRect(0, 0, 3000, 2000);
             }
 
+            // 5. Render Rumah
+            for (Building b : frame.savedBuildings) {
+                b.draw(g2d, houseImage); // Kita cukup suruh bangunannya menggambar dirinya sendiri!
+            }
+
+            // 6. Render Preview Kursor
             int pX = mouseX - (houseWidth / 2);
             int pY = mouseY - (houseHeight / 2);
             Rectangle previewRect = new Rectangle(pX, pY, houseWidth, houseHeight);
 
             g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
 
-            if (currentTool == ToolMode.BUILD || (currentTool == ToolMode.MOVE && holdingHouse != null)) {
+            if (currentTool == ToolMode.BUILD || (currentTool == ToolMode.MOVE && holdingBuilding != null)) {
                 if (isOverlapping(previewRect, null)) {
-                    g2d.setColor(new Color(255, 0, 0, 150)); g2d.fillRect(pX, pY, houseWidth, houseHeight);
+                    g2d.setColor(new Color(255, 0, 0, 150));
+                    g2d.fillRect(pX, pY, houseWidth, houseHeight);
                 } else {
                     if (houseImage != null) g2d.drawImage(houseImage, pX, pY, houseWidth, houseHeight, null);
                     else { g2d.setColor(new Color(200, 200, 200, 150)); g2d.fillRect(pX, pY, houseWidth, houseHeight); }
@@ -710,12 +921,17 @@ public class MainMenuGame extends JFrame {
                 g2d.setColor(new Color(255, 0, 0, 100));
                 g2d.fillOval(mouseX - 25, mouseY - 25, 50, 50);
             }
-            else if (currentTool == ToolMode.MOVE && holdingHouse == null) {
+            else if (currentTool == ToolMode.MOVE && holdingBuilding == null) {
                 g2d.setColor(new Color(0, 200, 255, 100));
                 g2d.fillOval(mouseX - 25, mouseY - 25, 50, 50);
             }
             g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+
+            // 7. Buang Kuas Kloning (Agar kembalinya bersih untuk HUD)
+            g2d.dispose();
         }
+
+
     }
 
     public static void main(String[] args) {
