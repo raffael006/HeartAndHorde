@@ -7,6 +7,7 @@ import java.awt.image.BufferedImage;
 import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
 import java.util.List;
+import java.awt.geom.Rectangle2D;
 
 
 public class GamePanel extends JPanel {
@@ -15,6 +16,9 @@ public class GamePanel extends JPanel {
     private BufferedImage houseImage;
     private BufferedImage archerImg;
     private BufferedImage spearmanImg;
+    private BufferedImage axemanImg;
+    private BufferedImage shieldImg;
+    private BufferedImage bowmanHordeImg;
 
     // --- ADT Kamera ---
     private Camera camera = new Camera();
@@ -64,20 +68,67 @@ public class GamePanel extends JPanel {
             System.out.println("Gagal memuat Pasukan Guard!");
         }
 
-        // 2. Setup Timer Mesin Kamera (60 FPS)
+        try {
+            axemanImg = ImageIO.read(new File("assets/img/1Horde.png"));
+            shieldImg = ImageIO.read(new File("assets/img/2Horde.png"));
+            bowmanHordeImg = ImageIO.read(new File("assets/img/3Horde.png"));
+        } catch (Exception e) {
+            System.out.println("Gagal memuat Pasukan Horde!");
+        }
+
         cameraTimer = new Timer(16, e -> {
             boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
 
-            boolean guardMoved = false;
+            // 1. Update Guards (Parameter Nambah)
             for (Guard g : window.activeGuards) {
-                g.update(window.activeGuards);
-                if (g.state == Guard.GuardState.MOVING) {
-                    guardMoved = true;
+                g.update(window.activeGuards, window.activeHordes, window.activeProjectiles);
+            }
+
+            // 2. Update Hordes (Parameter Nambah)
+            for (Horde h : window.activeHordes) {
+                h.update(window.activeHordes, window.activeGuards, window.activeProjectiles);
+            }
+
+            // --- 3. TAMBAHKAN LOOP PROYEKTIL INI ---
+            for (Projectile p : window.activeProjectiles) {
+                p.update();
+
+                // --- LOGIKA COLLISION / HITBOX SAAT DI UDARA ---
+                // (Agar efisien, kita cek di sini satu-satu list objek yang ada)
+                if (p.active && !p.hasLanded()) {
+                    Rectangle2D.Double pHitbox = p.getHitbox();
+
+                    if (p.isFromPlayer()) {
+                        // Cek kena Horde
+                        for (Horde enemy : window.activeHordes) {
+                            // Hitbox Horde kita buat sedikit besar biar gampang kena
+                            if (new Rectangle2D.Double(enemy.x, enemy.y, enemy.size, enemy.size).intersects(pHitbox)) {
+                                enemy.currentHp -= p.getDamage();
+                                p.active = false; // Panah hilang karena menancap di badan
+                                break; // Selesai cek list Horde untuk panah ini
+                            }
+                        }
+                    } else {
+                        // Cek kena Guard
+                        for (Guard guard : window.activeGuards) {
+                            if (new Rectangle2D.Double(guard.x, guard.y, guard.size, guard.size).intersects(pHitbox)) {
+                                guard.currentHp -= p.getDamage();
+                                p.active = false; // Panah hilang menancap di badan
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
-//            if (moved || guardMoved)
-           repaint();
+            // 4. Bersihkan data (Mayat & Panah non-aktif)
+            window.activeGuards.removeIf(g -> g.currentHp <= 0);
+            window.activeHordes.removeIf(h -> h.currentHp <= 0);
+
+            // --- TAMBAHKAN PEMBERSIH PANAH NON-AKTIF ---
+            window.activeProjectiles.removeIf(p -> !p.active);
+
+            repaint();
         });
         cameraTimer.start();
 
@@ -135,16 +186,48 @@ public class GamePanel extends JPanel {
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_X, 0), "toolDelete");
         getActionMap().put("toolDelete", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); }});
 
-        // Cheat Spawn Guard (Tekan K)
-        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_K, 0), "cheatSpawnGuard");
-        getActionMap().put("cheatSpawnGuard", new AbstractAction() {
+        // Cheat Spawn Spearman (Tekan K)
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_K, 0), "cheatSpawnSpearman");
+        getActionMap().put("cheatSpawnSpearman", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                // Munculkan Archer atau Spearman secara acak (50:50) di posisi mouse saat ini
-                Guard.GuardType type = Math.random() > 0.5 ? Guard.GuardType.SPEARMAN : Guard.GuardType.ARCHER;
-                window.activeGuards.add(new Guard(type, mouseX, mouseY));
+                // Langsung memanggil tipe SPEARMAN (Tombak) di posisi mouse
+                window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, mouseX, mouseY));
                 repaint();
             }
         });
+
+        // Cheat Spawn Archer (Tekan L)
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_L, 0), "cheatSpawnArcher");
+        getActionMap().put("cheatSpawnArcher", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                // Langsung memanggil tipe ARCHER (Panah) di posisi mouse
+                window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, mouseX, mouseY));
+                repaint();
+            }
+        });
+
+        // --- CHEAT SPAWN HORDE (Tekan 7, 8, 9) ---
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_7, 0), "spawnAxeman");
+        getActionMap().put("spawnAxeman", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                window.activeHordes.add(new Horde(Horde.HordeType.AXEMAN, mouseX, mouseY)); repaint();
+            }
+        });
+
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_8, 0), "spawnShield");
+        getActionMap().put("spawnShield", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                window.activeHordes.add(new Horde(Horde.HordeType.SHIELDBEARER, mouseX, mouseY)); repaint();
+            }
+        });
+
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_9, 0), "spawnBowmanHorde");
+        getActionMap().put("spawnBowmanHorde", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                window.activeHordes.add(new Horde(Horde.HordeType.BOWMAN, mouseX, mouseY)); repaint();
+            }
+        });
+
     }
 
     private void setupMouseListeners() {
@@ -446,14 +529,16 @@ public class GamePanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        camera.clamp(getWidth(), getHeight(), 3000, 2000);
+
+        camera.clamp(getWidth(), getHeight(), 3000, 3000);
 
         Graphics2D g2d = (Graphics2D) g.create();
         camera.applyTransform(g2d);
 
-        // Render Tanah
-        if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 2000, null);
-        else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, 3000, 2000); }
+
+        // Ubah dari 2000 menjadi 3000 agar sesuai proporsi aslinya
+        if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 3000, null);
+        else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, 3000, 3000); }
 
         // Render Rumah (ADT)
         for (Building b : window.savedBuildings) {
@@ -463,6 +548,20 @@ public class GamePanel extends JPanel {
         for (Guard hg : window.activeGuards) {
             BufferedImage spriteToUse = (hg.type == Guard.GuardType.ARCHER) ? archerImg : spearmanImg;
             hg.draw(g2d, spriteToUse);
+        }
+
+        for (Horde h : window.activeHordes) {
+            BufferedImage imgToUse = null;
+            if (h.type == Horde.HordeType.AXEMAN) imgToUse = axemanImg;
+            else if (h.type == Horde.HordeType.SHIELDBEARER) imgToUse = shieldImg;
+            else if (h.type == Horde.HordeType.BOWMAN) imgToUse = bowmanHordeImg;
+
+            h.draw(g2d, imgToUse);
+        }
+
+        // Digambar di atas pasukan agar terlihat melintas di langit
+        for (Projectile p : window.activeProjectiles) {
+            p.draw(g2d);
         }
 
         // Render Preview Kursor

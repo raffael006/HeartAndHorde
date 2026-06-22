@@ -12,6 +12,9 @@ public class GameWindow extends JFrame {
     // Data global game disimpan di "Bos" agar Menu dan GamePanel bisa mengaksesnya
     public List<Building> savedBuildings = new ArrayList<>();
     public List<Guard> activeGuards = new ArrayList<>();
+    public List<Horde> activeHordes = new ArrayList<>();
+    public List<Projectile> activeProjectiles = new ArrayList<>();
+
 
     public GameWindow() {
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");
