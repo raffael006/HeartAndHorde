@@ -19,7 +19,7 @@ public class Guard implements Serializable {
     public GuardType type;
     public GuardState state;
     public double targetX, targetY;
-    public double speed = 2.0;
+    public double speed = 1.0;
 
     // Atribut Posisi & Geometri
     public double x, y;

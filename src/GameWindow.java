@@ -1,6 +1,6 @@
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 public class GameWindow extends JFrame {
@@ -10,11 +10,11 @@ public class GameWindow extends JFrame {
     private JPanel mainContainer;
 
     // Data global game disimpan di "Bos" agar Menu dan GamePanel bisa mengaksesnya
-    public List<Building> savedBuildings = new ArrayList<>();
-    public List<Guard> activeGuards = new ArrayList<>();
-    public List<Horde> activeHordes = new ArrayList<>();
-    public List<Projectile> activeProjectiles = new ArrayList<>();
-
+    public List<Building> savedBuildings = new LinkedList<>();
+    public List<Guard> activeGuards = new LinkedList<>();
+    public List<Horde> activeHordes = new LinkedList<>();
+    public List<Projectile> activeProjectiles = new LinkedList<>();
+    public List<Civil> activeCivils = new LinkedList<>();
 
     public GameWindow() {
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");

@@ -41,11 +41,11 @@ public class Horde implements Serializable {
         if (this.type == HordeType.AXEMAN) {
             this.maxHp = 80;
             this.attackDamage = 10;
-            this.speed = 1.8;
+            this.speed = 1.0;
         } else if (this.type == HordeType.SHIELDBEARER) {
             this.maxHp = 150; // Darah paling tebal (Tank)
             this.attackDamage = 5;
-            this.speed = 1.0; // Paling lambat
+            this.speed = 0.7; // Paling lambat
         } else if (this.type == HordeType.BOWMAN) {
             this.maxHp = 50;  // Darah tipis
             this.attackDamage = 15;
