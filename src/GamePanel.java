@@ -428,8 +428,17 @@ public class GamePanel extends JPanel {
                 Point worldPos = camera.toWorld(e.getX(), e.getY());
 
                 int bw = getBuildWidth(selectedBuilding);
-                int targetX = worldPos.x - (bw / 2);
-                int targetY = worldPos.y - (bw / 2);
+
+
+
+                int rawTargetX = worldPos.x - (bw / 2);
+                int rawTargetY = worldPos.y - (bw / 2);
+
+                int targetX = Math.round((float) rawTargetX / 10f) * 10;
+                int targetY = Math.round((float) rawTargetY / 10f) * 10;
+
+
+
                 Rectangle newArea = new Rectangle(targetX, targetY, bw, bw);
 
                 if (currentTool == ToolMode.BUILD) {
@@ -516,9 +525,9 @@ public class GamePanel extends JPanel {
 
     // --- HELPER UNTUK MENGAMBIL DATA DINAMIS BANGUNAN ---
     private int getBuildWidth(Building.BuildingType type) {
-        if (type == Building.BuildingType.SMALL_HOUSE) return 60;   // Ukuran untuk Small
-        if (type == Building.BuildingType.BIG_HOUSE) return 130;    // Ukuran untuk Big (dibuat megah)
-        return 90; // MEDIUM (Standar)
+        if (type == Building.BuildingType.SMALL_HOUSE) return 70;   // Ukuran untuk Small
+        if (type == Building.BuildingType.BIG_HOUSE) return 90;    // Ukuran untuk Big (dibuat megah)
+        return 70; // MEDIUM (Standar)
     }
 
     private int getBuildCapacity(Building.BuildingType type) {
@@ -943,6 +952,20 @@ public class GamePanel extends JPanel {
         if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 3000, null);
         else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, 3000, 3000); }
 
+
+        //============GRID===========
+        if (currentTool == ToolMode.BUILD) {
+            g2d.setColor(new Color(255, 255, 255, 30)); // Warna putih sangat transparan (tipis)
+            g2d.setStroke(new BasicStroke(1f));
+            int gridSize = 10; // Jarak tiap kotak grid adalah 10 pixel
+
+            // Menggambar garis lurus vertikal & horizontal memenuhi map 3000x3000
+            for (int i = 0; i <= 3000; i += gridSize) {
+                g2d.drawLine(i, 0, i, 3000); // Garis Vertikal
+                g2d.drawLine(0, i, 3000, i); // Garis Horizontal
+            }
+        }
+
         // =======================================================
         // --- Y-SORTING (MENGATUR TUMPUKAN BERDASARKAN POSISI Y) ---
         // =======================================================
@@ -1012,8 +1035,12 @@ public class GamePanel extends JPanel {
             previewImg = getBuildImage(holdingBuilding.type);
         }
 
-        int pX = mouseX - (bw / 2);
-        int pY = mouseY - (bw / 2);
+        int rawX = mouseX - (bw / 2);
+        int rawY = mouseY - (bw / 2);
+
+        int pX = Math.round((float) rawX / 10f) * 10;
+        int pY = Math.round((float) rawY / 10f) * 10;
+
         Rectangle previewRect = new Rectangle(pX, pY, bw, bw);
 
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
