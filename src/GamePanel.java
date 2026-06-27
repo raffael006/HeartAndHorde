@@ -71,13 +71,24 @@ public class GamePanel extends JPanel {
     private final float MAX_DARKNESS = 0.65f;
     private int currentDay = 1;
 
+    //===============================TREE====================================================
+    // Hashtable (Spatial Hash) untuk menyimpan pohon berdasarkan petak Kavling
+    public java.util.HashMap<String, java.util.List<Tree>> mapPohon = new java.util.HashMap<>();
+    // Variabel untuk menyimpan gambar pohon
+    private BufferedImage treeImg;
+    //===================================================================================
+
     public GamePanel(GameWindow window) {
         this.window = window;
         setLayout(null);
 
+        // Tumbuhkan pohon di seluruh dunia!
+        generateForest();
+
         // 1. Muat Gambar (Menggunakan path src/ dan dipisah agar aman)
         try {
             gameplayBg = ImageIO.read(new File("assets/img/GAMEBACKGROUND.png"));
+            treeImg = ImageIO.read(new File("assets/img/tree.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Background!");
             e.printStackTrace();
@@ -1006,14 +1017,24 @@ public class GamePanel extends JPanel {
             renderList.add(new RenderItem(h.y + h.size, () -> h.draw(g2d, finalImg)));
         }
 
+        // 5. Masukkan Pohon dari Hashtable
+        // Kita ambil semua daftar pohon yang ada di dalam mapPohon
+        for (java.util.List<Tree> daftarPohon : mapPohon.values()) {
+            for (Tree pohon : daftarPohon) {
+                // bottomY pohon adalah posisi Y ditambah tinggi pohon
+                renderList.add(new RenderItem(pohon.y + pohon.height, () -> pohon.draw(g2d, treeImg)));
+            }
+        }
+
         // Urutkan dan Gambar! (Y Kecil/Atas digambar duluan, ditimpa oleh Y Besar/Bawah)
         renderList.sort((a, b) -> Double.compare(a.bottomY, b.bottomY));
+
+
+        // =======================================================
+
         for (RenderItem item : renderList) {
             item.drawAction.run();
         }
-        // =======================================================
-
-
 
         // Digambar di atas pasukan agar terlihat melintas di langit
         for (Projectile p : window.activeProjectiles) {
@@ -1123,7 +1144,7 @@ public class GamePanel extends JPanel {
             int by = mapY + (int)(b.getBounds().y * scale);
             int mapBw = Math.max(3, (int)(b.getBounds().width * scale));
             int mapBh = Math.max(3, (int)(b.getBounds().height * scale));
-            gMap.fillRect(bx, by, bw, mapBh);
+            gMap.fillRect(bx, by, mapBw, mapBh);
         }
 
         // D. Gambar Musuh / Horde (Titik Merah)
@@ -1199,5 +1220,46 @@ public class GamePanel extends JPanel {
 
         gMap.dispose();
 
+    }
+
+
+
+    private void generateForest() {
+        int ukuranKavling = 1000; // Map 3000x3000 dibagi jadi petakan 1000x1000
+
+        // Looping untuk 9 petak kavling (Sumbu X: 0, 1, 2 dan Sumbu Y: 0, 1, 2)
+        for (int gridX = 0; gridX < 3; gridX++) {
+            for (int gridY = 0; gridY < 3; gridY++) {
+
+                // 1. Buat "Key" untuk Hashtable (Contoh: "0,0", "1,2", dll)
+                String kunciKavling = gridX + "," + gridY;
+
+                // 2. Buat "LinkedList/ArrayList" kosong untuk petak ini
+                java.util.List<Tree> daftarPohon = new java.util.ArrayList<>();
+
+                // 3. Lempar dadu nasib untuk kavling ini (Angka acak 1, 2, atau 3)
+                int nasib = (int)(Math.random() * 3) + 1;
+
+                int jumlahPohon = 0;
+                if (nasib == 1) jumlahPohon = 25; // Hutan Lebat (25 Pohon)
+                else if (nasib == 3) jumlahPohon = 5; // Pinggiran Hutan (5 Pohon)
+                // Jika nasib == 2, jumlahPohon tetap 0 (Area Kosong untuk bangun desa)
+
+                // 4. Mulai tanam pohon sebanyak 'jumlahPohon'
+                for (int i = 0; i < jumlahPohon; i++) {
+                    // Matematika sederhana:
+                    // Titik Awal Petak + Angka Acak (0 sampai 900 agar tidak keluar batas petak)
+                    int randomX = (gridX * ukuranKavling) + (int)(Math.random() * 900);
+                    int randomY = (gridY * ukuranKavling) + (int)(Math.random() * 900);
+
+                    // Asumsi ukuran pohonmu adalah 60x80 pixel (Silakan sesuaikan nanti)
+                    Tree pohonBaru = new Tree(randomX, randomY, 60, 80);
+                    daftarPohon.add(pohonBaru);
+                }
+
+                // 5. Simpan daftar pohon yang sudah jadi ke dalam Hashtable
+                mapPohon.put(kunciKavling, daftarPohon);
+            }
+        }
     }
 }
