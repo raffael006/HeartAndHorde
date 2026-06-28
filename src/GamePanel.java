@@ -89,10 +89,7 @@ public class GamePanel extends JPanel {
         try {
             gameplayBg = ImageIO.read(new File("assets/img/GAMEBACKGROUND.png"));
             treeImg = ImageIO.read(new File("assets/img/tree.png"));
-        } catch (Exception e) {
-            System.out.println("Gagal memuat Background!");
-            e.printStackTrace();
-        }
+        } catch (Exception e) {}
 
         try {
             // Perbaikan: Tambahkan "assets/" dan sesuaikan nama file sm_house.png
@@ -264,7 +261,8 @@ public class GamePanel extends JPanel {
                 int w = getWidth();
                 int h = getHeight();
                 if(topRightBar != null && bottomLeftBar != null) {
-                    topRightBar.setBounds(w - 650, 0, 650, 40);
+                    // --- FIX: LEBAR DIPERSEMPIT JADI 830 AGAR PAS DENGAN LOGO DAN RAPIH ---
+                    topRightBar.setBounds(w - 830, 0, 830, 40);
                     menuBtn.setBounds(topRightBar.getWidth() - 40, 4, 32, 32);
 
                     // Posisi Wadah Tombol dipindah ke ATAS Minimap (tinggi wadah 80px)
@@ -299,7 +297,6 @@ public class GamePanel extends JPanel {
         getActionMap().put("dPress", new AbstractAction() { public void actionPerformed(ActionEvent e) { dPressed = true; }});
         getActionMap().put("dRelease", new AbstractAction() { public void actionPerformed(ActionEvent e) { dPressed = false; }});
 
-        // Shortcut Tools
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_B, 0), "toolBuild");
         getActionMap().put("toolBuild", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.BUILD; holdingBuilding = null; repaint(); }});
 
@@ -309,27 +306,20 @@ public class GamePanel extends JPanel {
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_X, 0), "toolDelete");
         getActionMap().put("toolDelete", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); }});
 
-        // Cheat Spawn Spearman (Tekan K)
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_K, 0), "cheatSpawnSpearman");
         getActionMap().put("cheatSpawnSpearman", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                // Langsung memanggil tipe SPEARMAN (Tombak) di posisi mouse
-                window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, mouseX, mouseY));
-                repaint();
+                window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, mouseX, mouseY)); repaint();
             }
         });
 
-        // Cheat Spawn Archer (Tekan L)
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_L, 0), "cheatSpawnArcher");
         getActionMap().put("cheatSpawnArcher", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                // Langsung memanggil tipe ARCHER (Panah) di posisi mouse
-                window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, mouseX, mouseY));
-                repaint();
+                window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, mouseX, mouseY)); repaint();
             }
         });
 
-        // --- CHEAT SPAWN HORDE (Tekan 7, 8, 9) ---
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_7, 0), "spawnAxeman");
         getActionMap().put("spawnAxeman", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
@@ -408,12 +398,51 @@ public class GamePanel extends JPanel {
                     // Jika di mode Command, klik kanan berarti menyuruh Guard jalan
                     if (currentTool == ToolMode.COMMAND) {
                         Point worldPos = camera.toWorld(e.getX(), e.getY());
+
+                        int selectedCount = 0;
                         for (Guard g : window.activeGuards) {
-                            if (g.isSelected) {
-                                // Arahkan mereka ke titik kursor (dikurangi setengah size agar pas di tengah)
-                                g.targetX = worldPos.x - (g.size / 2);
-                                g.targetY = worldPos.y - (g.size / 2);
-                                g.state = Guard.GuardState.MOVING;
+                            if (g.isSelected) selectedCount++;
+                        }
+
+                        if (selectedCount > 0) {
+                            int cols = (int) Math.ceil(Math.sqrt(selectedCount));
+                            int row = 0, col = 0;
+                            int spacing = 32;
+
+                            int startOffsetX = -((cols - 1) * spacing) / 2;
+                            int startOffsetY = -((cols - 1) * spacing) / 2;
+
+                            for (Guard g : window.activeGuards) {
+                                if (g.isSelected) {
+                                    double finalTargetX = worldPos.x + startOffsetX + (col * spacing) - (g.size / 2.0);
+                                    double finalTargetY = worldPos.y + startOffsetY + (row * spacing) - (g.size / 2.0);
+
+                                    java.util.List<Point> calculatedPath = PathFinder.findPath(
+                                            g.x + (g.size/2.0), g.y + (g.size/2.0),
+                                            finalTargetX + (g.size/2.0), finalTargetY + (g.size/2.0),
+                                            window.savedBuildings
+                                    );
+
+                                    if (calculatedPath.isEmpty()) {
+                                        finalTargetX = worldPos.x - (g.size / 2.0);
+                                        finalTargetY = worldPos.y - (g.size / 2.0);
+                                        calculatedPath = PathFinder.findPath(
+                                                g.x + (g.size/2.0), g.y + (g.size/2.0),
+                                                finalTargetX + (g.size/2.0), finalTargetY + (g.size/2.0),
+                                                window.savedBuildings
+                                        );
+                                    }
+
+                                    g.setPath(calculatedPath);
+                                    g.targetX = finalTargetX;
+                                    g.targetY = finalTargetY;
+                                    g.state = Guard.GuardState.MOVING;
+
+                                    col++;
+                                    if (col >= cols) {
+                                        col = 0; row++;
+                                    }
+                                }
                             }
                         }
                     } else if (holdingBuilding != null) {
@@ -588,9 +617,9 @@ public class GamePanel extends JPanel {
 
                 // MENGGELAP SAAT DIPILIH ATAU DI-HOVER
                 if (isSelected || (getModel().isRollover() && action != null)) {
-                    g2d.setColor(new Color(15, 12, 10)); // Sangat gelap layaknya lubang
+                    g2d.setColor(new Color(15, 12, 10));
                 } else {
-                    g2d.setColor(new Color(40, 35, 30)); // Abu-abu gelap normal
+                    g2d.setColor(new Color(40, 35, 30));
                 }
                 g2d.fillRect(0, 0, getWidth(), getHeight());
 
@@ -616,12 +645,15 @@ public class GamePanel extends JPanel {
     private void setupHUD() {
         // --- HUD KANAN ATAS (THE PIRATE MAP) ---
         topRightBar = new JPanel() {
-            // MENJADI 7 ITEM KARENA ADA TAMBAHAN HARI
-            private Rectangle[] hitboxes = new Rectangle[7];
+            private Rectangle[] hitboxes = new Rectangle[11];
             private String[] tooltips = {
                     "Hari Bertahan Hidup",
                     "Wave Serangan Horde",
                     "Total Silver (Kekayaan)",
+                    "Total Wood (Kayu)",
+                    "Total Stone (Batu)",
+                    "Total Steel (Baja)",
+                    "Total Food (Makanan)",
                     "Persentase Konsumsi Makanan",
                     "Total Civil (Penduduk)",
                     "Total Pasukan Guard",
@@ -630,10 +662,8 @@ public class GamePanel extends JPanel {
 
             @Override
             public String getToolTipText(MouseEvent e) {
-                for (int i = 0; i < 7; i++) {
-                    if (hitboxes[i] != null && hitboxes[i].contains(e.getPoint())) {
-                        return tooltips[i];
-                    }
+                for (int i = 0; i < 11; i++) {
+                    if (hitboxes[i] != null && hitboxes[i].contains(e.getPoint())) return tooltips[i];
                 }
                 return null;
             }
@@ -663,17 +693,24 @@ public class GamePanel extends JPanel {
 
                 int wave = 1;
                 int silver = 0;
+                int wood = 0;
+                int stone = 0;
+                int steel = 0;
+                int food = 0;
                 int konsumsi = 0;
-                int totalCivil = 0;
+                int totalCivil = window.activeCivils.size();
                 int totalGuard = window.activeGuards.size();
                 int totalBuilding = window.savedBuildings.size();
 
-                // TAMBAHAN IKON KALENDER UNTUK HARI DI PALING KIRI
-                String[] icons = {"📅", "💀", "🪙", "🍖", "👨‍🌾", "⚔️", "🏠"};
+                String[] icons = {"📅", "💀", "🪙", "🪵", "🪨", "⚙️", "🍞", "🍖", "👨‍🌾", "⚔️", "🏠"};
                 String[] values = {
                         String.valueOf(currentDay),
                         String.valueOf(wave),
                         String.valueOf(silver),
+                        String.valueOf(wood),
+                        String.valueOf(stone),
+                        String.valueOf(steel),
+                        String.valueOf(food),
                         konsumsi + "%",
                         String.valueOf(totalCivil),
                         String.valueOf(totalGuard),
@@ -682,10 +719,9 @@ public class GamePanel extends JPanel {
 
                 FontMetrics fm = g2d.getFontMetrics();
                 int textY = (h + fm.getAscent() - fm.getDescent()) / 2;
+                int startX = 20;
 
-                int startX = 20; // Mulai dari pinggir kiri
-
-                for (int i = 0; i < 7; i++) {
+                for (int i = 0; i < 11; i++) {
                     String textToDraw = icons[i] + " " + values[i];
                     g2d.drawString(textToDraw, startX, textY);
 
@@ -727,8 +763,7 @@ public class GamePanel extends JPanel {
                 g2d.setColor(new Color(140, 90, 50)); // Tinta coklat
                 g2d.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{4, 4}, 0));
                 g2d.drawOval(1, 1, getWidth() - 3, getHeight() - 3);
-
-                g2d.setColor(new Color(70, 40, 20)); // Teks sepia gelap
+                g2d.setColor(new Color(70, 40, 20));
                 g2d.setFont(new Font("SansSerif", Font.BOLD, 22));
                 FontMetrics fm = g2d.getFontMetrics();
                 g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
@@ -736,119 +771,60 @@ public class GamePanel extends JPanel {
                 g2d.dispose();
             }
         };
-        menuBtn.setContentAreaFilled(false);
-        menuBtn.setBorderPainted(false);
-        menuBtn.setFocusPainted(false);
+        menuBtn.setContentAreaFilled(false); menuBtn.setBorderPainted(false); menuBtn.setFocusPainted(false);
         menuBtn.addActionListener(e -> showInGameMenu());
+        topRightBar.add(menuBtn); add(topRightBar);
 
-        topRightBar.add(menuBtn);
-        add(topRightBar);
+        bottomLeftBar = new JPanel(); bottomLeftBar.setLayout(null); bottomLeftBar.setOpaque(false);
 
-        // Bar Kiri Bawah (Dipindah melayang di atas minimap)
-        bottomLeftBar = new JPanel();
-        bottomLeftBar.setLayout(null);
-        bottomLeftBar.setOpaque(false);
+        int mainSize = 76; int subSize = 36; int gap = 4; int startX2 = mainSize + 8;
 
-        // --- TOMBOL UTAMA (Layout Palu Besar Kiri, 2x2 Kanan) ---
-        int mainSize = 76; // Ukuran Palu (Sama dengan total tinggi 2x2)
-        int subSize = 36;  // Ukuran tombol kecil
-        int gap = 4;       // Jarak antar tombol kecil
-        int startX2 = mainSize + 8; // Posisi X untuk grid 2x2 (diberi jarak 8px dari palu)
-
-        // 1. Tombol Palu (Besar di Kiri)
         JButton buildBtn = createColorButton(new Color(110, 55, 25), ToolMode.NONE, "🔨");
         buildBtn.setBounds(0, 0, mainSize, mainSize);
         buildBtn.addActionListener(e -> {
             if (currentMenuState == MenuState.CLOSED) {
-                currentMenuState = MenuState.MAIN_MENU;
-                gridMenuPanel.setVisible(true);
-                updateGridMenu();
+                currentMenuState = MenuState.MAIN_MENU; gridMenuPanel.setVisible(true); updateGridMenu();
             } else {
-                currentMenuState = MenuState.CLOSED;
-                gridMenuPanel.setVisible(false);
-                currentTool = ToolMode.NONE;
+                currentMenuState = MenuState.CLOSED; gridMenuPanel.setVisible(false); currentTool = ToolMode.NONE;
             }
             holdingBuilding = null;
         });
         bottomLeftBar.add(buildBtn);
 
-        // 2. Tombol Move (Atas-Kiri)
         JButton moveBtn = createColorButton(new Color(100, 150, 255), ToolMode.MOVE, "✋");
         moveBtn.setBounds(startX2, 0, subSize, subSize);
         moveBtn.addActionListener(e -> { currentTool = ToolMode.MOVE; repaint(); });
         bottomLeftBar.add(moveBtn);
 
-        // 3. Tombol Delete (Atas-Kanan)
         JButton removeBtn = createColorButton(new Color(200, 50, 50), ToolMode.DELETE, "❌");
         removeBtn.setBounds(startX2 + subSize + gap, 0, subSize, subSize);
         removeBtn.addActionListener(e -> { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); });
         bottomLeftBar.add(removeBtn);
 
-        // 4. Tombol Defense (Bawah-Kiri) - Diubah jadi kotak agar seragam!
         JButton defBtn = createColorButton(new Color(100, 100, 120), ToolMode.NONE, "🛡️");
         defBtn.setBounds(startX2, subSize + gap, subSize, subSize);
         bottomLeftBar.add(defBtn);
 
-        // 5. Tombol Attack (Bawah-Kanan) - Diubah jadi kotak agar seragam!
         JButton atkBtn = createColorButton(new Color(150, 50, 50), ToolMode.COMMAND, "⚔️");
         atkBtn.setBounds(startX2 + subSize + gap, subSize + gap, subSize, subSize);
         atkBtn.addActionListener(e -> { currentTool = ToolMode.COMMAND; repaint(); });
         bottomLeftBar.add(atkBtn);
 
-        // --- THE DARK GRID MENU (Ukuran Diperkecil jadi 240x180) ---
         gridMenuPanel = new JPanel(new GridLayout(3, 4, 3, 3)) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
-                g2d.setColor(new Color(25, 20, 18, 240));
-                g2d.fillRect(0, 0, getWidth(), getHeight());
-
-                g2d.setColor(new Color(100, 75, 45));
-                g2d.setStroke(new BasicStroke(2f));
-                g2d.drawRect(1, 1, getWidth() - 3, getHeight() - 3);
-                g2d.dispose();
+                g2d.setColor(new Color(25, 20, 18, 240)); g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(new Color(100, 75, 45)); g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRect(1, 1, getWidth() - 3, getHeight() - 3); g2d.dispose();
             }
         };
-        // Posisi default awal
-        gridMenuPanel.setBounds(230, getHeight() - 200, 240, 180);
-        gridMenuPanel.setVisible(false);
+        gridMenuPanel.setBounds(230, getHeight() - 200, 240, 180); gridMenuPanel.setVisible(false);
 
-        add(topRightBar);
-        add(gridMenuPanel);
-        add(bottomLeftBar);
-
-        setComponentZOrder(topRightBar, 0);
-        setComponentZOrder(gridMenuPanel, 1);
-        setComponentZOrder(bottomLeftBar, 2);
+        add(topRightBar); add(gridMenuPanel); add(bottomLeftBar);
+        setComponentZOrder(topRightBar, 0); setComponentZOrder(gridMenuPanel, 1); setComponentZOrder(bottomLeftBar, 2);
     }
 
-    private JButton createCircleButton(Color baseColor, String icon) {
-        JButton btn = new JButton(icon) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2d = (Graphics2D) g.create();
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                Color topColor = getModel().isRollover() ? baseColor : baseColor.darker();
-                g2d.setPaint(new GradientPaint(0, 0, topColor, 0, getHeight(), baseColor.darker().darker()));
-                g2d.fillOval(0, 0, getWidth()-1, getHeight()-1);
-
-                g2d.setColor(new Color(255, 255, 255, 100));
-                g2d.drawOval(1, 1, getWidth()-3, getHeight()-3);
-
-                g2d.setColor(Color.WHITE);
-                g2d.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
-                FontMetrics fm = g2d.getFontMetrics();
-                g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
-
-                g2d.dispose();
-            }
-        };
-        btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
-        return btn;
-    }
-
-    // --- Fungsi Pembuat Tombol Cantik (Paste di bawah setupHUD) ---
     private JButton createColorButton(Color baseColor, ToolMode mode, String icon) {
         JButton btn = new JButton(icon) {
             @Override
@@ -952,37 +928,25 @@ public class GamePanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-
         camera.clamp(getWidth(), getHeight(), 3000, 3000);
-
         Graphics2D g2d = (Graphics2D) g.create();
         camera.applyTransform(g2d);
 
-
-        // Ubah dari 2000 menjadi 3000 agar sesuai proporsi aslinya
         if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 3000, null);
         else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, 3000, 3000); }
 
-
-        //============GRID===========
         if (currentTool == ToolMode.BUILD) {
-            g2d.setColor(new Color(255, 255, 255, 30)); // Warna putih sangat transparan (tipis)
+            g2d.setColor(new Color(255, 255, 255, 30));
             g2d.setStroke(new BasicStroke(1f));
-            int gridSize = 10; // Jarak tiap kotak grid adalah 10 pixel
-
-            // Menggambar garis lurus vertikal & horizontal memenuhi map 3000x3000
+            int gridSize = 10;
             for (int i = 0; i <= 3000; i += gridSize) {
-                g2d.drawLine(i, 0, i, 3000); // Garis Vertikal
-                g2d.drawLine(0, i, 3000, i); // Garis Horizontal
+                g2d.drawLine(i, 0, i, 3000);
+                g2d.drawLine(0, i, 3000, i);
             }
         }
 
-        // =======================================================
-        // --- Y-SORTING (MENGATUR TUMPUKAN BERDASARKAN POSISI Y) ---
-        // =======================================================
         class RenderItem {
-            double bottomY;
-            Runnable drawAction;
+            double bottomY; Runnable drawAction;
             RenderItem(double bottomY, Runnable drawAction) {
                 this.bottomY = bottomY; this.drawAction = drawAction;
             }
@@ -990,9 +954,8 @@ public class GamePanel extends JPanel {
 
         java.util.List<RenderItem> renderList = new java.util.ArrayList<>();
 
-        // 1. Masukkan Bangunan
         for (Building b : window.savedBuildings) {
-            BufferedImage img = getBuildImage(b.type); // Ambil gambar sesuai tipe (Small/Med/Big)
+            BufferedImage img = getBuildImage(b.type);
             renderList.add(new RenderItem(b.getBounds().getY() + b.getBounds().getHeight(), () -> b.draw(g2d, img)));
         }
 
@@ -1071,7 +1034,7 @@ public class GamePanel extends JPanel {
             Building ignoreB = (currentTool == ToolMode.MOVE) ? holdingBuilding : null;
 
             if (isOverlapping(previewRect, ignoreB)) {
-                g2d.setColor(new Color(255, 0, 0, 150)); // Merah (Nabrak)
+                g2d.setColor(new Color(255, 0, 0, 150));
                 g2d.fillRect(pX, pY, bw, bw);
             } else {
                 if (previewImg != null) {
@@ -1106,9 +1069,9 @@ public class GamePanel extends JPanel {
             int sw = Math.abs(dragStartScreen.x - dragEndScreen.x);
             int sh = Math.abs(dragStartScreen.y - dragEndScreen.y);
 
-            g2dHUD.setColor(new Color(0, 255, 0, 40)); // Warna hijau transparan
+            g2dHUD.setColor(new Color(0, 255, 0, 40));
             g2dHUD.fillRect(sx, sy, sw, sh);
-            g2dHUD.setColor(new Color(0, 255, 0, 150)); // Garis tepi
+            g2dHUD.setColor(new Color(0, 255, 0, 150));
             g2dHUD.setStroke(new BasicStroke(1.5f));
             g2dHUD.drawRect(sx, sy, sw, sh);
             g2dHUD.dispose();
@@ -1172,61 +1135,31 @@ public class GamePanel extends JPanel {
             gMap.fillRect(gx, gy, 3, 3);
         }
 
-        // F. Gambar Posisi Kamera (Kotak Putih Tipis)
-        gMap.setColor(new Color(255, 255, 255, 150));
-        gMap.setStroke(new BasicStroke(1f));
-
+        gMap.setColor(new Color(255, 255, 255, 150)); gMap.setStroke(new BasicStroke(1f));
         double camZoom = camera.getZoom();
-        double viewWorldX = -camera.getX() / camZoom;
-        double viewWorldY = -camera.getY() / camZoom;
-        double viewWorldW = getWidth() / camZoom;
-        double viewWorldH = getHeight() / camZoom;
-
-        int vx = mapX + (int)(viewWorldX * scale);
-        int vy = mapY + (int)(viewWorldY * scale);
-        int vw = (int)(viewWorldW * scale);
-        int vh = (int)(viewWorldH * scale);
-
+        double viewWorldX = -camera.getX() / camZoom; double viewWorldY = -camera.getY() / camZoom;
+        double viewWorldW = getWidth() / camZoom; double viewWorldH = getHeight() / camZoom;
+        int vx = mapX + (int)(viewWorldX * scale); int vy = mapY + (int)(viewWorldY * scale);
+        int vw = (int)(viewWorldW * scale); int vh = (int)(viewWorldH * scale);
         gMap.drawRect(vx, vy, vw, vh);
 
-        // =========================================================
-        // G. LOGO SIANG/MALAM SOLID DI SUDUT MINIMAP
-        // =========================================================
-        int ringSize = 42;
-        int ringX = mapX + mapSize - (ringSize / 2); // Menengah di garis tepi kanan
-        int ringY = mapY - (ringSize / 2);           // Menengah di garis tepi atas
+        int ringSize = 42; int ringX = mapX + mapSize - (ringSize / 2); int ringY = mapY - (ringSize / 2);
 
-        // 1. GAMBAR WARNA LANGIT (BACKGROUND)
-        if (isDayTime) {
-            gMap.setColor(new Color(110, 190, 240)); // Biru Langit Cerah Siang
-        } else {
-            gMap.setColor(new Color(20, 25, 60)); // Biru Langit Gelap Malam
-        }
+        if (isDayTime) { gMap.setColor(new Color(110, 190, 240)); } else { gMap.setColor(new Color(20, 25, 60)); }
         gMap.fillOval(ringX, ringY, ringSize, ringSize);
 
         // 2. GAMBAR BENDA LANGIT SOLID (MATAHARI / BULAN)
         if (isDayTime) {
-            gMap.setColor(new Color(255, 215, 0));
-            gMap.fillOval(ringX + 8, ringY + 8, 26, 26);
-            gMap.setColor(new Color(255, 255, 255, 100));
-            gMap.fillOval(ringX + 12, ringY + 12, 10, 10);
+            gMap.setColor(new Color(255, 215, 0)); gMap.fillOval(ringX + 8, ringY + 8, 26, 26);
+            gMap.setColor(new Color(255, 255, 255, 100)); gMap.fillOval(ringX + 12, ringY + 12, 10, 10);
         } else {
-            gMap.setColor(new Color(240, 240, 220));
-            gMap.fillOval(ringX + 10, ringY + 8, 24, 24);
-            gMap.setColor(new Color(20, 25, 60));
-            gMap.fillOval(ringX + 16, ringY + 4, 20, 20);
+            gMap.setColor(new Color(240, 240, 220)); gMap.fillOval(ringX + 10, ringY + 8, 24, 24);
+            gMap.setColor(new Color(20, 25, 60)); gMap.fillOval(ringX + 16, ringY + 4, 20, 20);
         }
 
-        // 3. FRAME BESI BINGKAI LUAR (INI YANG KEMARIN HILANG!)
-        gMap.setColor(new Color(40, 45, 50)); // Besi gelap
-        gMap.setStroke(new BasicStroke(4f));
-        gMap.drawOval(ringX, ringY, ringSize, ringSize); // Garis tebal luar
-
-        gMap.setColor(new Color(130, 135, 140)); // Outline silver
-        gMap.setStroke(new BasicStroke(1.5f));
-        gMap.drawOval(ringX - 2, ringY - 2, ringSize + 4, ringSize + 4);
-        gMap.drawOval(ringX + 2, ringY + 2, ringSize - 4, ringSize - 4);
-
+        gMap.setColor(new Color(40, 45, 50)); gMap.setStroke(new BasicStroke(4f)); gMap.drawOval(ringX, ringY, ringSize, ringSize);
+        gMap.setColor(new Color(130, 135, 140)); gMap.setStroke(new BasicStroke(1.5f));
+        gMap.drawOval(ringX - 2, ringY - 2, ringSize + 4, ringSize + 4); gMap.drawOval(ringX + 2, ringY + 2, ringSize - 4, ringSize - 4);
         gMap.dispose();
 
     }
