@@ -1075,7 +1075,16 @@ public class GamePanel extends JPanel {
                 g2d.fillRect(pX, pY, bw, bw);
             } else {
                 if (previewImg != null) {
-                    g2d.drawImage(previewImg, pX, pY, bw, bw, null); // Gambar rumah transparan
+                    Building.BuildingType typeToDraw = (currentTool == ToolMode.BUILD) ? selectedBuilding : holdingBuilding.type;
+
+                    // MINTA DATA UKURAN KE BUILDING.JAVA (DRY Principle)
+                    int drawW = Building.getVisualWidth(typeToDraw);
+                    int drawH = Building.getVisualHeight(typeToDraw);
+
+                    int drawX = pX - ((drawW - bw) / 2);
+                    int drawY = pY - (drawH - bw);
+
+                    g2d.drawImage(previewImg, drawX, drawY, drawW, drawH, null);
                 } else {
                     g2d.setColor(new Color(200, 200, 200, 150));
                     g2d.fillRect(pX, pY, bw, bw);
@@ -1241,8 +1250,8 @@ public class GamePanel extends JPanel {
                 int nasib = (int)(Math.random() * 3) + 1;
 
                 int jumlahPohon = 0;
-                if (nasib == 1) jumlahPohon = 25; // Hutan Lebat (25 Pohon)
-                else if (nasib == 3) jumlahPohon = 5; // Pinggiran Hutan (5 Pohon)
+                if (nasib == 1) jumlahPohon = 50; // Hutan Lebat (25 Pohon)
+                else if (nasib == 3) jumlahPohon = 20; // Pinggiran Hutan (5 Pohon)
                 // Jika nasib == 2, jumlahPohon tetap 0 (Area Kosong untuk bangun desa)
 
                 // 4. Mulai tanam pohon sebanyak 'jumlahPohon'
@@ -1253,7 +1262,7 @@ public class GamePanel extends JPanel {
                     int randomY = (gridY * ukuranKavling) + (int)(Math.random() * 900);
 
                     // Asumsi ukuran pohonmu adalah 60x80 pixel (Silakan sesuaikan nanti)
-                    Tree pohonBaru = new Tree(randomX, randomY, 60, 80);
+                    Tree pohonBaru = new Tree(randomX, randomY, 26, 47);
                     daftarPohon.add(pohonBaru);
                 }
 

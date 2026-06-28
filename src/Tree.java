@@ -18,10 +18,10 @@ public class Tree implements Serializable {
 
     }
 
-    // --- INI DIA INTI FISIKANYA (THE ANCHOR) ---
+    // --- INI DIA INTI FISIKANYA (collision) ---
     // Cuma area batang/akar bawah yang padat dan bisa ditabrak
     public Rectangle getSolidHitbox() {
-        // Kita set hanya 30% atau 40% bagian bawah yang solid (area batang pohon)
+        //  set hanya 30% atau 40% bagian bawah yang solid (area batang pohon)
         int solidHeight = (int) (height * 0.30);
         int solidY = y + height - solidHeight;
         return new Rectangle(x, solidY, width, solidHeight);

@@ -2,8 +2,8 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 
 public class Camera {
-    private double x = 0;
-    private double y = 0;
+    private double x = -3000;
+    private double y = -2000;
     private double zoom = 2.0;
     private final int panSpeed = 20;
 

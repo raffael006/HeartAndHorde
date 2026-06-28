@@ -29,13 +29,35 @@ public class Building implements Serializable {
     }
     public void exitBuilding(Civil civil) { occupants.remove(civil); }
 
-    public void draw(Graphics2D g2d, BufferedImage image) {
-        if (image != null) {
-            g2d.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height, null);
-        } else {
-            g2d.setColor(new Color(140, 70, 40));
-            g2d.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+    public void draw(Graphics2D g2d, BufferedImage img) {
+        if (img != null) {
+            // LANGSUNG AMBIL DARI PUSAT DATA!
+            int drawWidth = getVisualWidth(type);
+            int drawHeight = getVisualHeight(type);
+
+            // Tambahkan "bounds." untuk mengakses x, y, width, dan height
+            int drawX = bounds.x - ((drawWidth - bounds.width) / 2);
+            int drawY = bounds.y - (drawHeight - bounds.height);
+
+            g2d.drawImage(img, drawX, drawY, drawWidth, drawHeight, null);
         }
+    }
+
+
+    // Pusat Data: Lebar Visual Gambar PNG
+    public static int getVisualWidth(BuildingType type) {
+        if (type == BuildingType.SMALL_HOUSE) return 36;
+        if (type == BuildingType.MEDIUM_HOUSE) return 66;
+        if (type == BuildingType.BIG_HOUSE) return 86;
+        return 70; // Fallback default
+    }
+
+    // Pusat Data: Tinggi Visual Gambar PNG (Termasuk atap)
+    public static int getVisualHeight(BuildingType type) {
+        if (type == BuildingType.SMALL_HOUSE) return 69;
+        if (type == BuildingType.MEDIUM_HOUSE) return 69;
+        if (type == BuildingType.BIG_HOUSE) return 80;
+        return 70; // Fallback default
     }
 
     public Rectangle getBounds() { return bounds; }
