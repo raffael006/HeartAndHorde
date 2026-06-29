@@ -37,11 +37,18 @@ public class GameWindow extends JFrame {
         cardLayout = new CardLayout();
         mainContainer = new JPanel(cardLayout);
 
-        // --- NANTI KITA AKAN MASUKKAN MENU DAN GAME DI SINI ---
+        // --- SISTEM TUMPUKAN LAYAR GAME ---
+        // 1. Tambahkan SplashPanel di urutan pertama sebagai layar entrance
+        mainContainer.add(new SplashPanel(this), "SPLASH_SCREEN");
+
+        // 2. Tambahkan layar menu utama dan gameplay
         mainContainer.add(new MenuPanel(this), "MENU_SCREEN");
         mainContainer.add(new GamePanel(this), "GAME_SCREEN");
 
         setContentPane(mainContainer);
+
+        // Pastikan saat pertama kali game berjalan, layar SPLASH_SCREEN yang muncul
+        showScreen("SPLASH_SCREEN");
     }
 
     // Fungsi sakti untuk berpindah layar dengan 1 baris kode
@@ -50,6 +57,7 @@ public class GameWindow extends JFrame {
     }
 
     public static void main(String[] args) {
+        // Menjalankan game di thread Swing yang aman (Event Dispatch Thread)
         SwingUtilities.invokeLater(() -> {
             GameWindow window = new GameWindow();
             window.setVisible(true);

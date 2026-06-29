@@ -8,6 +8,10 @@ import java.awt.image.BufferedImage;
 import javax.sound.sampled.*;
 
 public class MenuPanel extends JPanel {
+    // --- VARIABEL BARU UNTUK ANIMASI TRANSISI MEDIEVAL ---
+    private float fadeAlpha = 0.0f;     // Tingkat kegelapan transisi (0.0f = transparan, 1.0f = hitam pekat)
+    private Timer fadeTimer;            // Timer khusus untuk menjalankan efek redup
+    private String pendingScreenAction; // Mencatat layar tujuan setelah animasi fade-out selesai
     private GameWindow window; // Referensi ke Bos
     private BufferedImage backgroundImage;
 
