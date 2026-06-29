@@ -8,15 +8,14 @@ import java.awt.image.BufferedImage;
 import javax.sound.sampled.*;
 
 public class MenuPanel extends JPanel {
-    // --- VARIABEL BARU UNTUK ANIMASI TRANSISI MEDIEVAL ---
-    private float fadeAlpha = 0.0f;     // Tingkat kegelapan transisi (0.0f = transparan, 1.0f = hitam pekat)
-    private Timer fadeTimer;            // Timer khusus untuk menjalankan efek redup
-    private String pendingScreenAction; // Mencatat layar tujuan setelah animasi fade-out selesai
-    private GameWindow window; // Referensi ke Bos
+    private GameWindow window;
     private BufferedImage backgroundImage;
-
-    // 1. DIUBAH MENJADI STATIC AGAR MUSIK PERSISTEN DI MEMORI
     private static Clip backgroundMusic;
+
+    // --- VARIABEL UNTUK ANIMASI FADE TO BLACK ---
+    private boolean isTransitioning = false;
+    private float fadeAlpha = 0.0f; // Tingkat kegelapan (0 = transparan, 1 = hitam pekat)
+    private Timer fadeTimer;
 
     // Kotak-kotak Menu
     private JPanel menuBox;
@@ -51,7 +50,6 @@ public class MenuPanel extends JPanel {
 
         playBackgroundMusic("assets/music/Medieval Ambient Music (Crossing the Withered Vale).wav");
 
-        // Buat 3 kotak menu
         menuBox = createMenuBox();
         add(menuBox);
 
@@ -63,7 +61,6 @@ public class MenuPanel extends JPanel {
         loadBox.setVisible(false);
         add(loadBox);
 
-        // Resize & State Listener agar menu selalu di tengah dan musik terpantau
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -74,7 +71,6 @@ public class MenuPanel extends JPanel {
 
             @Override
             public void componentShown(ComponentEvent e) {
-                // 2. KETIKA KEMBALI DARI GAMEPLAY KE MENU (CardLayout berganti), MUSIK AKAN OTOMATIS DI-RESUME
                 playBackgroundMusic("assets/music/Medieval Ambient Music (Crossing the Withered Vale).wav");
             }
         });
@@ -98,17 +94,14 @@ public class MenuPanel extends JPanel {
         }
     }
 
-    // 3. REVISI LOGIKA PENGECEKAN PINTAR AGAR TIDAK MENUMPUK ATAU MENGULANG LAGU
     private void playBackgroundMusic(String filePath) {
         if (backgroundMusic != null) {
-            // Jika musik sudah ada tapi sedang berhenti (misal habis keluar dari gameplay), langsung mainkan lagi
             if (!backgroundMusic.isRunning()) {
                 backgroundMusic.loop(Clip.LOOP_CONTINUOUSLY);
                 backgroundMusic.start();
             }
-            return; // Keluar dari fungsi, jangan muat ulang file agar tidak restart dari detik 0
+            return;
         }
-
         try {
             File musicPath = new File(filePath);
             if (musicPath.exists()) {
@@ -149,10 +142,8 @@ public class MenuPanel extends JPanel {
         else if (selectedRes.equals("1366 x 768")) { w = 1366; h = 768; }
 
         int hz = Integer.parseInt(selectedHz.replace(" Hz", ""));
-
         GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
 
-        // Memodifikasi Jendela Bos (GameWindow)
         window.dispose();
         if (gd.getFullScreenWindow() != null) gd.setFullScreenWindow(null);
 
@@ -173,15 +164,11 @@ public class MenuPanel extends JPanel {
         window.setVisible(true);
     }
 
-    // ==========================================
-    // SISTEM LOAD GAME
-    // ==========================================
     private boolean loadGameData(int slot) {
         File file = new File("heart_save_" + slot + ".dat");
         if (!file.exists()) return false;
 
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-            // Masukkan data langsung ke variabel bos
             window.savedBuildings = (List<Building>) ois.readObject();
             return true;
         } catch (Exception e) {
@@ -196,6 +183,42 @@ public class MenuPanel extends JPanel {
         slot3Btn.setText(new File("heart_save_3.dat").exists() ? "SAVE SLOT 3  [ DATA FOUND ]" : "SAVE SLOT 3  [ EMPTY ]");
     }
 
+    // ==========================================
+    // FUNGSI ANIMASI FADE TO BLACK (TRANSISI)
+    // ==========================================
+    private void startFadeTransition(Runnable dataSetupAction) {
+        if (isTransitioning) return; // Cegah tombol diklik berkali-kali
+
+        isTransitioning = true;
+        fadeAlpha = 0.0f;
+
+        // Musik otomatis berhenti saat animasi mulai gelap
+        if (backgroundMusic != null) backgroundMusic.stop();
+
+        fadeTimer = new Timer(20, evt -> {
+            fadeAlpha += 0.03f; // Menentukan kecepatan transisi gelap
+
+            if (fadeAlpha >= 1.0f) {
+                fadeAlpha = 1.0f;
+                fadeTimer.stop();
+
+                // Menjalankan perintah (misal clear map untuk campaign)
+                dataSetupAction.run();
+
+                // Pindah Layar
+                window.showScreen("GAME_SCREEN");
+
+                // Kembalikan ke normal agar jika kembali ke menu tidak gelap
+                isTransitioning = false;
+                fadeAlpha = 0.0f;
+                menuBox.setVisible(true);
+                loadBox.setVisible(false);
+                isOverlayOpen = false;
+            }
+            repaint();
+        });
+        fadeTimer.start();
+    }
 
     // ==========================================
     // PEMBUAT UI (Menu, Options, Load)
@@ -307,7 +330,6 @@ public class MenuPanel extends JPanel {
         return panel;
     }
 
-    // Komponen Pembantu UI
     private JPanel createSettingRow(String labelText) {
         JPanel row = new JPanel(new BorderLayout()); row.setOpaque(false); row.setMaximumSize(new Dimension(550, 35));
         JLabel label = new JLabel(labelText); label.setFont(new Font("Serif", Font.PLAIN, 18)); label.setForeground(Color.WHITE);
@@ -330,14 +352,33 @@ public class MenuPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) g2d.setPaint(new GradientPaint(0, 0, new Color(45, 55, 75), 0, getHeight(), new Color(20, 25, 35)));
-                else g2d.setPaint(new GradientPaint(0, 0, new Color(30, 35, 45), 0, getHeight(), new Color(15, 18, 25)));
-                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
-                g2d.setColor(getModel().isRollover() ? new Color(150, 180, 220) : new Color(80, 100, 130));
-                g2d.setStroke(new BasicStroke(1.5f)); g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
-                g2d.setColor(getModel().isRollover() ? Color.WHITE : new Color(200, 200, 200));
-                g2d.setFont(new Font("Serif", Font.BOLD, 18)); FontMetrics fm = g2d.getFontMetrics();
-                g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+                int yOffset = 0;
+                if (getModel().isPressed()) {
+                    g2d.setPaint(new GradientPaint(0, 0, new Color(15, 20, 30), 0, getHeight(), new Color(5, 10, 15)));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.setColor(new Color(60, 80, 110));
+                    g2d.setStroke(new BasicStroke(1.5f));
+                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
+                    g2d.setColor(new Color(150, 150, 150));
+                    yOffset = 2;
+                } else if (getModel().isRollover()) {
+                    g2d.setPaint(new GradientPaint(0, 0, new Color(45, 55, 75), 0, getHeight(), new Color(20, 25, 35)));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.setColor(new Color(150, 180, 220));
+                    g2d.setStroke(new BasicStroke(1.5f));
+                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
+                    g2d.setColor(Color.WHITE);
+                } else {
+                    g2d.setPaint(new GradientPaint(0, 0, new Color(30, 35, 45), 0, getHeight(), new Color(15, 18, 25)));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.setColor(new Color(80, 100, 130));
+                    g2d.setStroke(new BasicStroke(1.5f));
+                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
+                    g2d.setColor(new Color(200, 200, 200));
+                }
+                g2d.setFont(new Font("Serif", Font.BOLD, 18));
+                FontMetrics fm = g2d.getFontMetrics();
+                g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2 + yOffset);
                 g2d.dispose();
             }
         };
@@ -346,9 +387,9 @@ public class MenuPanel extends JPanel {
         button.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); }});
 
         button.addActionListener(e -> {
-            if (loadGameData(slotIndex)) {
-                if (backgroundMusic != null) backgroundMusic.stop();
-                window.showScreen("GAME_SCREEN");
+            if (isTransitioning) return; // Kunci biar ga spam klik
+            if (new File("heart_save_" + slotIndex + ".dat").exists()) {
+                startFadeTransition(() -> loadGameData(slotIndex));
             } else {
                 JOptionPane.showMessageDialog(this, "Slot " + slotIndex + " kosong! Buat Campaign baru terlebih dahulu.", "Data Not Found", JOptionPane.WARNING_MESSAGE);
             }
@@ -362,14 +403,33 @@ public class MenuPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) g2d.setPaint(new GradientPaint(0, 0, new Color(135, 35, 25), 0, getHeight(), new Color(75, 15, 10)));
-                else g2d.setPaint(new GradientPaint(0, 0, new Color(85, 25, 15), 0, getHeight(), new Color(45, 10, 5)));
-                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
-                g2d.setColor(getModel().isRollover() ? new Color(230, 185, 110) : new Color(130, 85, 45));
-                g2d.setStroke(new BasicStroke(1.5f)); g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
-                g2d.setColor(getModel().isRollover() ? new Color(255, 245, 220) : Color.WHITE);
-                g2d.setFont(new Font("Serif", Font.PLAIN, 15)); FontMetrics fm = g2d.getFontMetrics();
-                g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+                int yOffset = 0;
+                if (getModel().isPressed()) {
+                    g2d.setPaint(new GradientPaint(0, 0, new Color(55, 15, 10), 0, getHeight(), new Color(25, 5, 0)));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.setColor(new Color(180, 140, 80));
+                    g2d.setStroke(new BasicStroke(1.5f));
+                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
+                    g2d.setColor(new Color(200, 190, 170));
+                    yOffset = 2;
+                } else if (getModel().isRollover()) {
+                    g2d.setPaint(new GradientPaint(0, 0, new Color(135, 35, 25), 0, getHeight(), new Color(75, 15, 10)));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.setColor(new Color(230, 185, 110));
+                    g2d.setStroke(new BasicStroke(1.5f));
+                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
+                    g2d.setColor(new Color(255, 245, 220));
+                } else {
+                    g2d.setPaint(new GradientPaint(0, 0, new Color(85, 25, 15), 0, getHeight(), new Color(45, 10, 5)));
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.setColor(new Color(130, 85, 45));
+                    g2d.setStroke(new BasicStroke(1.5f));
+                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
+                    g2d.setColor(Color.WHITE);
+                }
+                g2d.setFont(new Font("Serif", Font.PLAIN, 15));
+                FontMetrics fm = g2d.getFontMetrics();
+                g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2 + yOffset);
                 g2d.dispose();
             }
         };
@@ -378,14 +438,15 @@ public class MenuPanel extends JPanel {
         button.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); }});
 
         button.addActionListener(e -> {
+            if (isTransitioning) return; // Kunci biar ga spam klik
+
             switch (text) {
                 case "CONTINUE":
                     updateLoadBoxUI(); isOverlayOpen = true; menuBox.setVisible(false); loadBox.setVisible(true); repaint();
                     break;
                 case "CAMPAIGN":
-                    window.savedBuildings.clear(); // Hapus data lama
-                    if (backgroundMusic != null) backgroundMusic.stop();
-                    window.showScreen("GAME_SCREEN");
+                    // --- MENGGUNAKAN FUNGSI FADE TO BLACK ---
+                    startFadeTransition(() -> window.savedBuildings.clear());
                     break;
                 case "OPTIONS":
                     isOverlayOpen = true; menuBox.setVisible(false); optionsBox.setVisible(true); repaint();
@@ -407,9 +468,11 @@ public class MenuPanel extends JPanel {
         Graphics2D g2d = (Graphics2D) g;
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        // 1. Gambar Background Menu
         if (backgroundImage != null) g2d.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), null);
         else { g2d.setPaint(new GradientPaint(0, 0, new Color(35, 25, 20), getWidth(), getHeight(), new Color(10, 8, 5))); g2d.fillRect(0, 0, getWidth(), getHeight()); }
 
+        // 2. Render Judul Game jika tidak ada pop-up option/load
         if (!isOverlayOpen) {
             g2d.setFont(new Font("Georgia", Font.BOLD, 68));
             g2d.setColor(new Color(0, 0, 0, 80)); g2d.drawString("Heart&Horde", 85, 105);
@@ -421,6 +484,16 @@ public class MenuPanel extends JPanel {
             g2d.setColor(new Color(0, 0, 0, 200)); g2d.drawString("Bloodshed in Cryonia", 107, 142);
             g2d.setPaint(new GradientPaint(105, 120, new Color(220, 220, 220), 105, 145, new Color(150, 145, 140)));
             g2d.drawString("Bloodshed in Cryonia", 105, 140);
+        }
+
+        // ==========================================
+        // 3. RENDER LAYER HITAM (FADE TO BLACK)
+        // ==========================================
+        // Harus digambar paling akhir agar menutupi semuanya!
+        if (fadeAlpha > 0.0f) {
+            float alphaSafe = Math.min(1.0f, Math.max(0.0f, fadeAlpha));
+            g2d.setColor(new Color(0, 0, 0, alphaSafe));
+            g2d.fillRect(0, 0, getWidth(), getHeight());
         }
     }
 }
