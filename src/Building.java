@@ -9,7 +9,7 @@ public class Building implements Serializable {
     private Rectangle bounds;
 
     // --- FITUR BARU: TIPE BANGUNAN DINAMIS ---
-    public enum BuildingType { SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE }
+    public enum BuildingType { SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE, WALL_L, WALL_R, WALL_UD }
     public BuildingType type;
 
     public int maxCapacity;
@@ -46,18 +46,20 @@ public class Building implements Serializable {
 
     // Pusat Data: Lebar Visual Gambar PNG
     public static int getVisualWidth(BuildingType type) {
+        if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 10;
         if (type == BuildingType.SMALL_HOUSE) return 36;
         if (type == BuildingType.MEDIUM_HOUSE) return 66;
         if (type == BuildingType.BIG_HOUSE) return 86;
-        return 70; // Fallback default
+        return 70;
     }
 
     // Pusat Data: Tinggi Visual Gambar PNG (Termasuk atap)
     public static int getVisualHeight(BuildingType type) {
+        if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 28;
         if (type == BuildingType.SMALL_HOUSE) return 69;
         if (type == BuildingType.MEDIUM_HOUSE) return 69;
         if (type == BuildingType.BIG_HOUSE) return 80;
-        return 70; // Fallback default
+        return 70;
     }
 
     public Rectangle getBounds() { return bounds; }
@@ -69,4 +71,6 @@ public class Building implements Serializable {
         int solidY = bounds.y + bounds.height - solidHeight;
         return new Rectangle(bounds.x, solidY, bounds.width, solidHeight);
     }
+
+
 }

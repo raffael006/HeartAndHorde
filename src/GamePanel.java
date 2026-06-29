@@ -22,6 +22,9 @@ public class GamePanel extends JPanel {
     private BufferedImage shieldImg;
     private BufferedImage bowmanHordeImg;
     private BufferedImage civilImg;
+    private BufferedImage wallLeftImg;
+    private BufferedImage wallRightImg;
+    private BufferedImage wallUDImg;
 
     // --- ADT Kamera ---
     private Camera camera = new Camera();
@@ -31,13 +34,16 @@ public class GamePanel extends JPanel {
     private boolean wPressed = false, sPressed = false, aPressed = false, dPressed = false;
 
     // --- Variabel Alat & Bangunan ---
-    private enum ToolMode { NONE, BUILD, MOVE, DELETE, COMMAND }
+    private enum ToolMode { NONE, BUILD, MOVE, DELETE, COMMAND, CHOP_WOOD }
     private ToolMode currentTool = ToolMode.NONE;
     private int mouseX = -100, mouseY = -100;
     private Point dragStartScreen = null;
     private Point dragEndScreen = null;
     private boolean isDragging = false;
     private Building holdingBuilding = null;
+    private boolean isDraggingWall = false;
+    private Point dragStartPoint = new Point();
+    private Point dragCurrentPoint = new Point();
 
 
     // --- Variabel UI/HUD ---
@@ -70,6 +76,7 @@ public class GamePanel extends JPanel {
     private float currentDarkness = 0f;
     private final float MAX_DARKNESS = 0.65f;
     private int currentDay = 1;
+    public int totalWood = 0;
 
     //===============================TREE====================================================
     // Hashtable (Spatial Hash) untuk menyimpan pohon berdasarkan petak Kavling
@@ -119,6 +126,14 @@ public class GamePanel extends JPanel {
             civilImg = ImageIO.read(new File("assets/img/civil_h&h.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Civil!");
+        }
+
+        try {
+            wallLeftImg = ImageIO.read(new File("assets/img/woodenWall_L.png"));
+            wallRightImg = ImageIO.read(new File("assets/img/woodenWall_R.png"));
+            wallUDImg = ImageIO.read(new File("assets/img/WoodenWall_UD.png"));
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         cameraTimer = new Timer(16, e -> {
@@ -210,6 +225,23 @@ public class GamePanel extends JPanel {
             // 4. Bersihkan data (Mayat & Panah non-aktif)
             window.activeGuards.removeIf(g -> g.currentHp <= 0);
             window.activeHordes.removeIf(h -> h.currentHp <= 0);
+
+            // --- LOGIKA PROGRESS TEBANG POHON ---
+            for (java.util.List<Tree> daftarPohon : mapPohon.values()) {
+                // Kita pakai Iterator agar aman menghapus pohon dari daftar saat sedang di-loop
+                java.util.Iterator<Tree> it = daftarPohon.iterator();
+                while (it.hasNext()) {
+                    Tree pohon = it.next();
+                    if (pohon.isHarvesting) {
+                        pohon.harvestProgress += 1.0f; // Kecepatan loading (bisa dikecilin kalau ketuaan)
+
+                        if (pohon.harvestProgress >= pohon.maxHarvest) {
+                            it.remove(); // Hapus pohon dari map
+                            totalWood += 5; // Yey! Kayu bertambah +5
+                        }
+                    }
+                }
+            }
 
             // --- TAMBAHKAN PEMBERSIH PANAH NON-AKTIF ---
             window.activeProjectiles.removeIf(p -> !p.active);
@@ -379,6 +411,15 @@ public class GamePanel extends JPanel {
                     dragEndScreen = e.getPoint();
                     repaint();
                 }
+                if (isDraggingWall) {
+                    Point worldPos = camera.toWorld(e.getX(), e.getY());
+                    int bw = 10;
+                    int rawTargetX = worldPos.x - (bw / 2);
+                    int rawTargetY = worldPos.y - (bw / 2);
+                    dragCurrentPoint.x = Math.round((float) rawTargetX / 10f) * 10;
+                    dragCurrentPoint.y = Math.round((float) rawTargetY / 10f) * 10;
+                    repaint();
+                }
             }
         });
 
@@ -481,8 +522,30 @@ public class GamePanel extends JPanel {
 
                 Rectangle newArea = new Rectangle(targetX, targetY, bw, bw);
 
+                // --- LOGIKA TEBANG POHON ---
+                if (currentTool == ToolMode.CHOP_WOOD) {
+                    for (java.util.List<Tree> daftarPohon : mapPohon.values()) {
+                        for (Tree pohon : daftarPohon) {
+                            if (pohon.getBounds().contains(worldPos)) {
+                                pohon.isHarvesting = true; // Pohon mulai ditebang!
+                            }
+                        }
+                    }
+                }
+
                 if (currentTool == ToolMode.BUILD) {
-                    if (!isOverlapping(newArea, null)) {
+                    boolean isWall = (selectedBuilding == Building.BuildingType.WALL_L ||
+                            selectedBuilding == Building.BuildingType.WALL_R ||
+                            selectedBuilding == Building.BuildingType.WALL_UD);
+
+                    if (isWall) {
+                        isDraggingWall = true;
+                        dragStartPoint.x = targetX;
+                        dragStartPoint.y = targetY;
+                        dragCurrentPoint.x = targetX;
+                        dragCurrentPoint.y = targetY;
+
+                    } else if (!isOverlapping(newArea, null)) {
                         int cap = getBuildCapacity(selectedBuilding);
                         window.savedBuildings.add(new Building(targetX, targetY, bw, bw, selectedBuilding, cap));
 
@@ -552,6 +615,37 @@ public class GamePanel extends JPanel {
                     }
                     repaint();
                 }
+
+                if (currentTool == ToolMode.BUILD && isDraggingWall) {
+                    isDraggingWall = false;
+                    int diffX = Math.abs(dragCurrentPoint.x - dragStartPoint.x);
+                    int diffY = Math.abs(dragCurrentPoint.y - dragStartPoint.y);
+
+                    if (diffX > diffY) {
+                        // HORIZONTAL
+                        int startX = Math.min(dragStartPoint.x, dragCurrentPoint.x);
+                        int endX = Math.max(dragStartPoint.x, dragCurrentPoint.x);
+                        int y = dragStartPoint.y;
+                        for (int x = startX; x <= endX; x += 10) {
+                            // Ujung kiri = WALL_L, sisanya = WALL_R (Sesuai idemu!)
+                            Building.BuildingType type = (x == startX) ? Building.BuildingType.WALL_L : Building.BuildingType.WALL_R;
+                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null)) {
+                                window.savedBuildings.add(new Building(x, y, 10, 10, type, 0));
+                            }
+                        }
+                    } else {
+                        // VERTIKAL
+                        int startY = Math.min(dragStartPoint.y, dragCurrentPoint.y);
+                        int endY = Math.max(dragStartPoint.y, dragCurrentPoint.y);
+                        int x = dragStartPoint.x;
+                        for (int y = startY; y <= endY; y += 10) {
+                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null)) {
+                                window.savedBuildings.add(new Building(x, y, 10, 10, Building.BuildingType.WALL_UD, 0));
+                            }
+                        }
+                    }
+                    repaint();
+                }
             }
         });
     }
@@ -565,17 +659,23 @@ public class GamePanel extends JPanel {
 
     // --- HELPER UNTUK MENGAMBIL DATA DINAMIS BANGUNAN ---
     private int getBuildWidth(Building.BuildingType type) {
-        if (type == Building.BuildingType.SMALL_HOUSE) return 70;   // Ukuran untuk Small
-        if (type == Building.BuildingType.BIG_HOUSE) return 90;    // Ukuran untuk Big (dibuat megah)
-        return 70; // MEDIUM (Standar)
+        if (type == Building.BuildingType.WALL_L || type == Building.BuildingType.WALL_R || type == Building.BuildingType.WALL_UD) return 10;
+        if (type == Building.BuildingType.SMALL_HOUSE) return 70;
+        if (type == Building.BuildingType.BIG_HOUSE) return 90;
+        return 70;
     }
 
     private int getBuildCapacity(Building.BuildingType type) {
+        if (type == Building.BuildingType.WALL_L || type == Building.BuildingType.WALL_R || type == Building.BuildingType.WALL_UD) return 0; // Tembok tidak menampung Civil
         if (type == Building.BuildingType.SMALL_HOUSE) return 2;
         if (type == Building.BuildingType.BIG_HOUSE) return 8;
-        return 4; // MEDIUM
+        return 4;
     }
+
     private BufferedImage getBuildImage(Building.BuildingType type) {
+        if (type == Building.BuildingType.WALL_L) return wallLeftImg;
+        if (type == Building.BuildingType.WALL_R) return wallRightImg;
+        if (type == Building.BuildingType.WALL_UD) return wallUDImg;
         if (type == Building.BuildingType.SMALL_HOUSE) return smallHouseImg;
         if (type == Building.BuildingType.BIG_HOUSE) return bigHouseImg;
         return mediumHouseImg;
@@ -588,22 +688,34 @@ public class GamePanel extends JPanel {
         if (currentMenuState == MenuState.MAIN_MENU) {
             gridMenuPanel.add(createGridBtn("👨‍🌾", () -> { currentMenuState = MenuState.CIVIL_MENU; updateGridMenu(); }, false));
             gridMenuPanel.add(createGridBtn("⚔️", () -> { currentMenuState = MenuState.MILITARY_MENU; updateGridMenu(); }, false));
+
             for(int i=0; i<10; i++) gridMenuPanel.add(createGridBtn("", null, false));
         }
         else if (currentMenuState == MenuState.CIVIL_MENU) {
             boolean isSmall = (selectedBuilding == Building.BuildingType.SMALL_HOUSE);
             boolean isMed = (selectedBuilding == Building.BuildingType.MEDIUM_HOUSE);
             boolean isBig = (selectedBuilding == Building.BuildingType.BIG_HOUSE);
+            boolean isWall = (selectedBuilding == Building.BuildingType.WALL_L);
+            boolean isChop = (currentTool == ToolMode.CHOP_WOOD);
 
             // Hanya Emoji Tanpa Teks
             gridMenuPanel.add(createGridBtn("🏠", () -> { selectedBuilding = Building.BuildingType.SMALL_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isSmall));
             gridMenuPanel.add(createGridBtn("🏘️", () -> { selectedBuilding = Building.BuildingType.MEDIUM_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isMed));
             gridMenuPanel.add(createGridBtn("🏰", () -> { selectedBuilding = Building.BuildingType.BIG_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isBig));
+            gridMenuPanel.add(createGridBtn("🧱", () -> {
+                selectedBuilding = Building.BuildingType.WALL_L; // Jadikan L sebagai default/pancingan awal
+                currentTool = ToolMode.BUILD;
+                updateGridMenu();
+                repaint();
+            }, isWall));
+            gridMenuPanel.add(createGridBtn("🪓", () -> {
+                currentTool = ToolMode.CHOP_WOOD;
+                updateGridMenu();
+                repaint();
+            }, isChop));
 
-            for(int i=0; i<8; i++) gridMenuPanel.add(createGridBtn("", null, false));
-
-            gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));
-        }
+            for(int i=0; i<9; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));        }
         gridMenuPanel.revalidate();
         gridMenuPanel.repaint();
     }
@@ -693,7 +805,6 @@ public class GamePanel extends JPanel {
 
                 int wave = 1;
                 int silver = 0;
-                int wood = 0;
                 int stone = 0;
                 int steel = 0;
                 int food = 0;
@@ -707,7 +818,7 @@ public class GamePanel extends JPanel {
                         String.valueOf(currentDay),
                         String.valueOf(wave),
                         String.valueOf(silver),
-                        String.valueOf(wood),
+                        String.valueOf(totalWood),
                         String.valueOf(stone),
                         String.valueOf(steel),
                         String.valueOf(food),
@@ -935,6 +1046,8 @@ public class GamePanel extends JPanel {
         if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 3000, null);
         else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, 3000, 3000); }
 
+
+
         if (currentTool == ToolMode.BUILD) {
             g2d.setColor(new Color(255, 255, 255, 30));
             g2d.setStroke(new BasicStroke(1f));
@@ -1029,7 +1142,36 @@ public class GamePanel extends JPanel {
 
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
 
-        if (currentTool == ToolMode.BUILD || (currentTool == ToolMode.MOVE && holdingBuilding != null)) {
+        if (isDraggingWall) {
+            // RENDER BAYANGAN TEMBOK PANJANG
+            int diffX = Math.abs(dragCurrentPoint.x - dragStartPoint.x);
+            int diffY = Math.abs(dragCurrentPoint.y - dragStartPoint.y);
+
+            if (diffX > diffY) {
+                int startX = Math.min(dragStartPoint.x, dragCurrentPoint.x);
+                int endX = Math.max(dragStartPoint.x, dragCurrentPoint.x);
+                for (int x = startX; x <= endX; x += 10) {
+                    Building.BuildingType type = (x == startX) ? Building.BuildingType.WALL_L : Building.BuildingType.WALL_R;
+                    if(isOverlapping(new Rectangle(x, dragStartPoint.y, 10, 10), null)) {
+                        g2d.setColor(new Color(255, 0, 0, 150)); g2d.fillRect(x, dragStartPoint.y, 10, 10);
+                    } else {
+                        // Tinggi ditarik ke atas sejauh 18 (28 - 10)
+                        g2d.drawImage(getBuildImage(type), x, dragStartPoint.y - 18, 10, 28, null);
+                    }
+                }
+            } else {
+                int startY = Math.min(dragStartPoint.y, dragCurrentPoint.y);
+                int endY = Math.max(dragStartPoint.y, dragCurrentPoint.y);
+                for (int y = startY; y <= endY; y += 10) {
+                    if(isOverlapping(new Rectangle(dragStartPoint.x, y, 10, 10), null)) {
+                        g2d.setColor(new Color(255, 0, 0, 150)); g2d.fillRect(dragStartPoint.x, y, 10, 10);
+                    } else {
+                        g2d.drawImage(getBuildImage(Building.BuildingType.WALL_UD), dragStartPoint.x, y - 18, 10, 28, null);
+                    }
+                }
+            }
+        }
+        else if (currentTool == ToolMode.BUILD || (currentTool == ToolMode.MOVE && holdingBuilding != null)) {
             // Biar saat pindah bangunan (Move) dia gak mendeteksi nabrak dirinya sendiri
             Building ignoreB = (currentTool == ToolMode.MOVE) ? holdingBuilding : null;
 
