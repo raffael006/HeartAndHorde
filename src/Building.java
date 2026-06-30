@@ -9,11 +9,18 @@ public class Building implements Serializable {
     private Rectangle bounds;
 
     // --- FITUR BARU: TIPE BANGUNAN DINAMIS ---
-    public enum BuildingType { SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE, WALL_L, WALL_R, WALL_UD }
+    public enum BuildingType {
+        SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE, WALL_L, WALL_R, WALL_UD,
+        FARM, STORAGE, BARRACK
+    }
     public BuildingType type;
 
     public int maxCapacity;
     public List<Civil> occupants;
+
+    public boolean isDemolishing = false;
+    public float demolishProgress = 0f;
+    public float maxDemolish = 100f; // Waktu untuk hancur
 
     public Building(int x, int y, int width, int height, BuildingType type, int capacity) {
         this.bounds = new Rectangle(x, y, width, height);
@@ -41,6 +48,18 @@ public class Building implements Serializable {
 
             g2d.drawImage(img, drawX, drawY, drawWidth, drawHeight, null);
         }
+
+        if (isDemolishing) {
+            int barW = 30; int barH = 5;
+            int barX = bounds.x + (bounds.width - barW) / 2;
+            int barY = bounds.y - 10;
+
+            g2d.setColor(new Color(0, 0, 0, 150));
+            g2d.fillRect(barX, barY, barW, barH);
+            g2d.setColor(Color.RED);
+            int fillW = (int) ((demolishProgress / maxDemolish) * barW);
+            g2d.fillRect(barX, barY, fillW, barH);
+        }
     }
 
 
@@ -50,6 +69,10 @@ public class Building implements Serializable {
         if (type == BuildingType.SMALL_HOUSE) return 36;
         if (type == BuildingType.MEDIUM_HOUSE) return 66;
         if (type == BuildingType.BIG_HOUSE) return 86;
+        // --- BANGUNAN BARU ---
+        if (type == BuildingType.FARM) return 108;    // Sesuaikan lebar farm.png
+        if (type == BuildingType.STORAGE) return 70; // Sesuaikan lebar storage.png
+        if (type == BuildingType.BARRACK) return 114; // Sesuaikan lebar barrack.png
         return 70;
     }
 
@@ -59,6 +82,9 @@ public class Building implements Serializable {
         if (type == BuildingType.SMALL_HOUSE) return 69;
         if (type == BuildingType.MEDIUM_HOUSE) return 69;
         if (type == BuildingType.BIG_HOUSE) return 80;
+        if (type == BuildingType.FARM) return 61;    // Sesuaikan tinggi farm.png
+        if (type == BuildingType.STORAGE) return 45; // Sesuaikan tinggi storage.png
+        if (type == BuildingType.BARRACK) return 71;
         return 70;
     }
 

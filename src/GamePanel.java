@@ -25,6 +25,11 @@ public class GamePanel extends JPanel {
     private BufferedImage wallLeftImg;
     private BufferedImage wallRightImg;
     private BufferedImage wallUDImg;
+    private BufferedImage abandonedMineImg;
+    private BufferedImage builtMineImg;
+    private BufferedImage farmImg;
+    private BufferedImage storageImg;
+    private BufferedImage barrackImg;
 
     // --- ADT Kamera ---
     private Camera camera = new Camera();
@@ -44,6 +49,8 @@ public class GamePanel extends JPanel {
     private boolean isDraggingWall = false;
     private Point dragStartPoint = new Point();
     private Point dragCurrentPoint = new Point();
+    public java.util.List<Mine> activeMines = new java.util.ArrayList<>();
+    private Mine clickedMine = null;
 
 
     // --- Variabel UI/HUD ---
@@ -56,10 +63,10 @@ public class GamePanel extends JPanel {
     private JButton house1Btn, house2Btn, house3Btn;
 
     // --- VARIABEL GRID MENU & ALAT ---
-    private enum MenuState { CLOSED, MAIN_MENU, CIVIL_MENU, MILITARY_MENU }
-    private MenuState currentMenuState = MenuState.CLOSED;
+    private enum MenuState { CLOSED, MAIN_MENU, CIVIL_MENU, MILITARY_MENU, BUILDING_SELECTED, MINE_SELECTED }    private MenuState currentMenuState = MenuState.MAIN_MENU;
     private Building.BuildingType selectedBuilding = Building.BuildingType.MEDIUM_HOUSE;
     private JPanel gridMenuPanel;
+    private Building clickedBuilding = null;
 
     // Kita ubah jadi Width agar dia meluncur/mengembang ke kanan
     private double currentSubWidth = 0.0;
@@ -92,6 +99,16 @@ public class GamePanel extends JPanel {
         // Tumbuhkan pohon di seluruh dunia!
         generateForest();
 
+        // Panggil fungsi pembuat tambang
+        generateMines();
+
+        try {
+            abandonedMineImg = ImageIO.read(new File("assets/img/abandoned_mine.png"));
+            builtMineImg = ImageIO.read(new File("assets/img/mine.png"));
+        } catch (Exception e) {
+            System.out.println("Gagal memuat gambar Tambang!");
+        }
+
         // 1. Muat Gambar (Menggunakan path src/ dan dipisah agar aman)
         try {
             gameplayBg = ImageIO.read(new File("assets/img/GAMEBACKGROUND.png"));
@@ -103,6 +120,9 @@ public class GamePanel extends JPanel {
             smallHouseImg = ImageIO.read(new File("assets/img/smhouse.png"));
             mediumHouseImg = ImageIO.read(new File("assets/img/mhouse.png"));
             bigHouseImg = ImageIO.read(new File("assets/img/bighouse.png"));
+            farmImg = ImageIO.read(new File("assets/img/farm.png"));
+            storageImg = ImageIO.read(new File("assets/img/storage.png"));
+            barrackImg = ImageIO.read(new File("assets/img/barrack.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Gambar Rumah!");
         }
@@ -170,6 +190,8 @@ public class GamePanel extends JPanel {
                         if (g.y + g.size/2 < wall.y + wall.height/2) g.y -= g.speed; else g.y += g.speed;
                     }
                 }
+
+
 
                 // 2. Cek Tabrakan Horde
                 for (Horde h : window.activeHordes) {
@@ -239,6 +261,25 @@ public class GamePanel extends JPanel {
                             it.remove(); // Hapus pohon dari map
                             totalWood += 5; // Yey! Kayu bertambah +5
                         }
+                    }
+                }
+            }
+
+            // --- LOGIKA PROGRESS MENGHANCURKAN BANGUNAN ---
+            for (Building b : window.savedBuildings) {
+                if (b.isDemolishing) b.demolishProgress += 1.0f;
+            }
+            // Bersihkan jika sudah hancur total
+            window.savedBuildings.removeIf(b -> b.isDemolishing && b.demolishProgress >= b.maxDemolish);
+
+            // --- LOGIKA PROGRESS PEMBANGUNAN TAMBANG ---
+            for (Mine m : activeMines) {
+                if (m.isBuilding && !m.isBuilt) {
+                    m.buildProgress += 1.0f; // Kecepatan bangun
+
+                    if (m.buildProgress >= m.maxBuild) {
+                        m.isBuilt = true;      // Ganti wujud ke mine.png!
+                        m.isBuilding = false;  // Matikan loading bar
                     }
                 }
             }
@@ -508,6 +549,49 @@ public class GamePanel extends JPanel {
 
                 Point worldPos = camera.toWorld(e.getX(), e.getY());
 
+
+                // --- LOGIKA KLIK BANGUNAN & TAMBANG UNTUK MENU DINAMIS ---
+                if (currentTool == ToolMode.NONE) {
+                    boolean hitSomething = false;
+
+                    // 1. Cek Bangunan (Rumah) Terlebih Dahulu
+                    for (int i = window.savedBuildings.size() - 1; i >= 0; i--) {
+                        Building b = window.savedBuildings.get(i);
+                        if (b.contains(worldPos) && !b.isDemolishing) {
+                            clickedBuilding = b;
+                            clickedMine = null; // Reset status tambang
+                            currentMenuState = MenuState.BUILDING_SELECTED;
+                            updateGridMenu();
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+
+                    // 2. Jika tidak kena rumah, cek Tambang
+                    if (!hitSomething) {
+                        for (Mine m : activeMines) {
+                            if (m.getBounds().contains(worldPos)) {
+                                clickedMine = m;
+                                clickedBuilding = null; // Reset status rumah
+                                currentMenuState = MenuState.MINE_SELECTED;
+                                updateGridMenu();
+                                hitSomething = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 3. Kalau klik tanah kosong
+                    if (!hitSomething) {
+                        clickedBuilding = null;
+                        clickedMine = null;
+                        currentMenuState = MenuState.MAIN_MENU;
+                        updateGridMenu();
+                    }
+                    repaint();
+                    return;
+                }
+
                 int bw = getBuildWidth(selectedBuilding);
 
 
@@ -678,6 +762,9 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.WALL_UD) return wallUDImg;
         if (type == Building.BuildingType.SMALL_HOUSE) return smallHouseImg;
         if (type == Building.BuildingType.BIG_HOUSE) return bigHouseImg;
+        if (type == Building.BuildingType.FARM) return farmImg;
+        if (type == Building.BuildingType.STORAGE) return storageImg;
+        if (type == Building.BuildingType.BARRACK) return barrackImg;
         return mediumHouseImg;
     }
 
@@ -697,6 +784,9 @@ public class GamePanel extends JPanel {
             boolean isBig = (selectedBuilding == Building.BuildingType.BIG_HOUSE);
             boolean isWall = (selectedBuilding == Building.BuildingType.WALL_L);
             boolean isChop = (currentTool == ToolMode.CHOP_WOOD);
+            boolean isFarm = (selectedBuilding == Building.BuildingType.FARM);
+            boolean isStorage = (selectedBuilding == Building.BuildingType.STORAGE);
+
 
             // Hanya Emoji Tanpa Teks
             gridMenuPanel.add(createGridBtn("🏠", () -> { selectedBuilding = Building.BuildingType.SMALL_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isSmall));
@@ -713,9 +803,93 @@ public class GamePanel extends JPanel {
                 updateGridMenu();
                 repaint();
             }, isChop));
+            gridMenuPanel.add(createGridBtn("🌾", () -> { selectedBuilding = Building.BuildingType.FARM; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isFarm));
+            gridMenuPanel.add(createGridBtn("📦", () -> { selectedBuilding = Building.BuildingType.STORAGE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isStorage));
 
-            for(int i=0; i<9; i++) gridMenuPanel.add(createGridBtn("", null, false));
-            gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));        }
+            for(int i=0; i<7; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));
+        }
+        else if (currentMenuState == MenuState.MILITARY_MENU) {
+            boolean isBarrack = (selectedBuilding == Building.BuildingType.BARRACK);
+
+            // Tambahkan tombol Barrack
+            gridMenuPanel.add(createGridBtn("⚔️🏠", () -> {
+                selectedBuilding = Building.BuildingType.BARRACK;
+                currentTool = ToolMode.BUILD;
+                updateGridMenu();
+                repaint();
+            }, isBarrack));
+
+            // Isi sisa 10 kotak kosong dan 1 tombol kembali
+            for(int i=0; i<10; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));
+        }
+
+
+        else if (currentMenuState == MenuState.BUILDING_SELECTED) {
+            // 1. Tombol UPGRADE (Sementara cuma print log)
+            gridMenuPanel.add(createGridBtn("⬆️", () -> {
+                System.out.println("Fitur Upgrade akan segera hadir!");
+            }, false));
+
+            // 2. Tombol MOVE (Angkat bangunan)
+            gridMenuPanel.add(createGridBtn("✋", () -> {
+                if (clickedBuilding != null) {
+                    holdingBuilding = clickedBuilding;
+                    window.savedBuildings.remove(clickedBuilding); // Cabut dari tanah
+                    clickedBuilding = null; // Lepaskan pilihan
+                    currentTool = ToolMode.MOVE;
+                    currentMenuState = MenuState.MAIN_MENU; // Kembalikan menu
+                    updateGridMenu();
+                    repaint();
+                }
+            }, false));
+
+            // 3. Tombol DESTROY (Mulai Loading Hancur)
+            gridMenuPanel.add(createGridBtn("❌", () -> {
+                if (clickedBuilding != null) {
+                    clickedBuilding.isDemolishing = true; // Picu loading bar merah
+                    clickedBuilding = null;
+                    currentMenuState = MenuState.MAIN_MENU;
+                    updateGridMenu();
+                }
+            }, false));
+
+            // Isi 8 kotak kosong dan 1 tombol kembali
+            for(int i=0; i<8; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            gridMenuPanel.add(createGridBtn("⬅️", () -> {
+                clickedBuilding = null; currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); repaint();
+            }, false));
+        }
+
+        else if (currentMenuState == MenuState.MINE_SELECTED) {
+            // Jika tambang belum dibangun dan belum dalam proses loading
+            if (clickedMine != null && !clickedMine.isBuilt && !clickedMine.isBuilding) {
+                // Tombol Palu untuk Membangun Tambang
+                gridMenuPanel.add(createGridBtn("🔨", () -> {
+                    if (clickedMine != null) {
+                        clickedMine.isBuilding = true; // Mulai loading!
+                        clickedMine = null; // Tutup menu agar pemain fokus lihat loading
+                        currentMenuState = MenuState.MAIN_MENU;
+                        updateGridMenu();
+                        repaint();
+                    }
+                }, false));
+
+                // Isi sisa grid yang kosong (8 kotak + 1 kembali)
+                for(int i=0; i<8; i++) gridMenuPanel.add(createGridBtn("", null, false));
+                gridMenuPanel.add(createGridBtn("⬅️", () -> {
+                    clickedMine = null; currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); repaint();
+                }, false));
+            }
+            else {
+                // Jika tambang SUDAH JADI (mine.png), menu sementara kosong atau bisa diisi fitur nambang ke depannya
+                for(int i=0; i<9; i++) gridMenuPanel.add(createGridBtn("", null, false));
+                gridMenuPanel.add(createGridBtn("⬅️", () -> {
+                    clickedMine = null; currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); repaint();
+                }, false));
+            }
+        }
         gridMenuPanel.revalidate();
         gridMenuPanel.repaint();
     }
@@ -1063,15 +1237,22 @@ public class GamePanel extends JPanel {
             RenderItem(double bottomY, Runnable drawAction) {
                 this.bottomY = bottomY; this.drawAction = drawAction;
             }
+
         }
 
         java.util.List<RenderItem> renderList = new java.util.ArrayList<>();
 
         for (Building b : window.savedBuildings) {
             BufferedImage img = getBuildImage(b.type);
-            renderList.add(new RenderItem(b.getBounds().getY() + b.getBounds().getHeight(), () -> b.draw(g2d, img)));
+            renderList.add(new RenderItem(b.getBounds().getY() + b.getBounds().getHeight(), () -> {
+                b.draw(g2d, img);
+                // --- EFEK HIGHLIGHT KUNING JIKA DIKLIK ---
+                if (b == clickedBuilding) {
+                    g2d.setColor(new Color(255, 255, 0, 70)); // Kuning transparan
+                    g2d.fillRect(b.getBounds().x, b.getBounds().y, b.getBounds().width, b.getBounds().height);
+                }
+            }));
         }
-
         // 2. Masukkan Civil
         for (Civil c : window.activeCivils) {
             renderList.add(new RenderItem(c.y + c.size, () -> c.draw(g2d, civilImg)));
@@ -1100,6 +1281,19 @@ public class GamePanel extends JPanel {
                 // bottomY pohon adalah posisi Y ditambah tinggi pohon
                 renderList.add(new RenderItem(pohon.y + pohon.height, () -> pohon.draw(g2d, treeImg)));
             }
+        }
+
+        // Masukkan Tambang ke daftar render
+        for (Mine m : activeMines) {
+            renderList.add(new RenderItem(m.y + m.height, () -> {
+                m.draw(g2d, abandonedMineImg, builtMineImg);
+
+                // --- EFEK HIGHLIGHT KUNING JIKA DIKLIK ---
+                if (m == clickedMine) {
+                    g2d.setColor(new Color(255, 255, 0, 70));
+                    g2d.fillRect(m.x, m.y, m.width, m.height);
+                }
+            }));
         }
 
         // Urutkan dan Gambar! (Y Kecil/Atas digambar duluan, ditimpa oleh Y Besar/Bawah)
@@ -1324,9 +1518,9 @@ public class GamePanel extends JPanel {
                 // 3. Lempar dadu nasib untuk kavling ini (Angka acak 1, 2, atau 3)
                 int nasib = (int)(Math.random() * 3) + 1;
 
-                int jumlahPohon = 0;
-                if (nasib == 1) jumlahPohon = 50; // Hutan Lebat (25 Pohon)
-                else if (nasib == 3) jumlahPohon = 20; // Pinggiran Hutan (5 Pohon)
+                int jumlahPohon = 30;
+                if (nasib == 1) jumlahPohon = 100; // Hutan Lebat (25 Pohon)
+                else if (nasib == 3) jumlahPohon = 50; // Pinggiran Hutan (5 Pohon)
                 // Jika nasib == 2, jumlahPohon tetap 0 (Area Kosong untuk bangun desa)
 
                 // 4. Mulai tanam pohon sebanyak 'jumlahPohon'
@@ -1344,6 +1538,17 @@ public class GamePanel extends JPanel {
                 // 5. Simpan daftar pohon yang sudah jadi ke dalam Hashtable
                 mapPohon.put(kunciKavling, daftarPohon);
             }
+        }
+    }
+
+    private void generateMines() {
+        int jumlahTambang = 8; // Ubah jumlah tambang yang mau disebar di map
+        for (int i = 0; i < jumlahTambang; i++) {
+            // Acak posisi di map 3000x3000, tapi sisakan batas pinggir
+            int randomX = 100 + (int)(Math.random() * 2800);
+            int randomY = 100 + (int)(Math.random() * 2800);
+
+            activeMines.add(new Mine(randomX, randomY));
         }
     }
 }
