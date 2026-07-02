@@ -664,7 +664,7 @@ public class GamePanel extends JPanel {
                         dragCurrentPoint.x = targetX;
                         dragCurrentPoint.y = targetY;
 
-                    } else if (!isOverlapping(newArea, null)) {
+                    } else if (!isOverlapping(newArea, null) && !isTreeBlocking(newArea)) {
                         int cap = getBuildCapacity(selectedBuilding);
                         window.savedBuildings.add(new Building(targetX, targetY, bw, bw, selectedBuilding, cap));
 
@@ -748,7 +748,7 @@ public class GamePanel extends JPanel {
                         for (int x = startX; x <= endX; x += 10) {
                             // Ujung kiri = WALL_L, sisanya = WALL_R (Sesuai idemu!)
                             Building.BuildingType type = (x == startX) ? Building.BuildingType.WALL_L : Building.BuildingType.WALL_R;
-                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null)) {
+                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
                                 window.savedBuildings.add(new Building(x, y, 10, 10, type, 0));
                             }
                         }
@@ -758,7 +758,7 @@ public class GamePanel extends JPanel {
                         int endY = Math.max(dragStartPoint.y, dragCurrentPoint.y);
                         int x = dragStartPoint.x;
                         for (int y = startY; y <= endY; y += 10) {
-                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null)) {
+                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
                                 window.savedBuildings.add(new Building(x, y, 10, 10, Building.BuildingType.WALL_UD, 0));
                             }
                         }
@@ -772,6 +772,19 @@ public class GamePanel extends JPanel {
     private boolean isOverlapping(Rectangle newRect, Building ignoreBuilding) {
         for (Building b : window.savedBuildings) {
             if (b != ignoreBuilding && b.intersects(newRect)) return true;
+        }
+        return false;
+    }
+
+    // --- CEK APAKAH MASIH ADA POHON DI AREA YANG MAU DIBANGUN ---
+    // Selama pohonnya belum habis ditebang (masih ada di mapPohon), area itu tidak boleh dibangun.
+    private boolean isTreeBlocking(Rectangle newRect) {
+        for (List<Tree> daftarPohon : mapPohon.values()) {
+            for (Tree pohon : daftarPohon) {
+                if (pohon.getBounds().intersects(newRect)) {
+                    return true; // Masih ada pohon -> harus ditebang dulu
+                }
+            }
         }
         return false;
     }
@@ -1395,7 +1408,7 @@ public class GamePanel extends JPanel {
                 int endX = Math.max(dragStartPoint.x, dragCurrentPoint.x);
                 for (int x = startX; x <= endX; x += 10) {
                     Building.BuildingType type = (x == startX) ? Building.BuildingType.WALL_L : Building.BuildingType.WALL_R;
-                    if(isOverlapping(new Rectangle(x, dragStartPoint.y, 10, 10), null)) {
+                    if(isOverlapping(new Rectangle(x, dragStartPoint.y, 10, 10), null) || isTreeBlocking(new Rectangle(x, dragStartPoint.y, 10, 10))) {
                         g2d.setColor(new Color(255, 0, 0, 150)); g2d.fillRect(x, dragStartPoint.y, 10, 10);
                     } else {
                         // Tinggi ditarik ke atas sejauh 18 (28 - 10)
@@ -1406,7 +1419,7 @@ public class GamePanel extends JPanel {
                 int startY = Math.min(dragStartPoint.y, dragCurrentPoint.y);
                 int endY = Math.max(dragStartPoint.y, dragCurrentPoint.y);
                 for (int y = startY; y <= endY; y += 10) {
-                    if(isOverlapping(new Rectangle(dragStartPoint.x, y, 10, 10), null)) {
+                    if(isOverlapping(new Rectangle(dragStartPoint.x, y, 10, 10), null) || isTreeBlocking(new Rectangle(dragStartPoint.x, y, 10, 10))) {
                         g2d.setColor(new Color(255, 0, 0, 150)); g2d.fillRect(dragStartPoint.x, y, 10, 10);
                     } else {
                         g2d.drawImage(getBuildImage(Building.BuildingType.WALL_UD), dragStartPoint.x, y - 18, 10, 28, null);
@@ -1417,19 +1430,18 @@ public class GamePanel extends JPanel {
         else if (currentTool == ToolMode.BUILD || (currentTool == ToolMode.MOVE && holdingBuilding != null)) {
             // Biar saat pindah bangunan (Move) dia gak mendeteksi nabrak dirinya sendiri
             Building ignoreB = (currentTool == ToolMode.MOVE) ? holdingBuilding : null;
+            Building.BuildingType typeToDraw = (currentTool == ToolMode.BUILD) ? selectedBuilding : holdingBuilding.type;
 
-            // --- HITUNG UKURAN PONDASI (MENGKOPY LOGIKA DARI getSolidHitbox) ---
-            int solidH = (int) (bw * 0.40);
-            int solidY = pY + bw - solidH;
+            // --- HITUNG UKURAN PONDASI (PAKAI LOGIKA YANG SAMA DENGAN Building.getSolidHitbox) ---
+            // Supaya preview-nya persis sama bentuknya dengan hitbox asli setelah bangunan jadi ditaruh.
+            Rectangle solidPreview = Building.computeSolidHitbox(pX, pY, bw, bw, typeToDraw);
 
-            if (isOverlapping(previewRect, ignoreB)) {
+            if (isOverlapping(previewRect, ignoreB) || isTreeBlocking(previewRect)) {
                 g2d.setColor(new Color(255, 0, 0, 150));
                 // HANYA GAMBAR AREA MERAH DI PONDASI BAWAHNYA SAJA!
-                g2d.fillRect(pX, solidY, bw, solidH);
+                g2d.fillRect(solidPreview.x, solidPreview.y, solidPreview.width, solidPreview.height);
             } else {
                 if (previewImg != null) {
-                    Building.BuildingType typeToDraw = (currentTool == ToolMode.BUILD) ? selectedBuilding : holdingBuilding.type;
-
                     int drawW = Building.getVisualWidth(typeToDraw);
                     int drawH = Building.getVisualHeight(typeToDraw);
 
@@ -1439,7 +1451,7 @@ public class GamePanel extends JPanel {
                     g2d.drawImage(previewImg, drawX, drawY, drawW, drawH, null);
                 } else {
                     g2d.setColor(new Color(200, 200, 200, 150));
-                    g2d.fillRect(pX, solidY, bw, solidH);
+                    g2d.fillRect(solidPreview.x, solidPreview.y, solidPreview.width, solidPreview.height);
                 }
             }
         }

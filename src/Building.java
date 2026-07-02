@@ -126,9 +126,59 @@ public class Building implements Serializable {
     public boolean intersects(Rectangle r) { return bounds.intersects(r); }
 
     public Rectangle getSolidHitbox() {
-        int solidHeight = (int) (bounds.height * 0.40);
-        int solidY = bounds.y + bounds.height - solidHeight;
-        return new Rectangle(bounds.x, solidY, bounds.width, solidHeight);
+        return computeSolidHitbox(bounds.x, bounds.y, bounds.width, bounds.height, type);
+    }
+
+    // --- PUSAT LOGIKA HITBOX (dipakai juga oleh GamePanel saat preview build/move) ---
+    // Supaya hitbox SELALU sama persis dengan bentuk gambar bangunannya,
+    // dan tidak dobel-hitung/berbeda antara Building.java dan GamePanel.java.
+    public static Rectangle computeSolidHitbox(int x, int y, int width, int height, BuildingType type) {
+        if (type == BuildingType.FARM) {
+            // Full gambar jadi solid, disamakan persis posisinya dengan visual di draw().
+            int visualWidth = getVisualWidth(type);
+            int visualHeight = getVisualHeight(type);
+            int farmX = x - ((visualWidth - width) / 2);
+            int farmY = y - (visualHeight - height);
+            return new Rectangle(farmX, farmY, visualWidth, visualHeight);
+        }
+
+        int solidWidth = getSolidWidth(type, width);
+        int solidHeight = getSolidHeight(type, height);
+
+        // Ditengahkan (center) mengikuti titik tengah bounds,
+        // sama seperti cara gambar visualnya digambar terpusat di draw()
+        int solidX = x + (width - solidWidth) / 2;
+        int solidY = y + height - solidHeight; // Tetap nempel di BAWAH (depan), atas/belakang dibiarkan kosong
+
+        return new Rectangle(solidX, solidY, solidWidth, solidHeight);
+    }
+
+    // Lebar dinding depan yang BENERAN solid (menyesuaikan gambar aslinya).
+    // Kalau tidak didaftar di sini, dianggap lebar dindingnya = lebar bounds/pondasi (sudah pas, tidak diubah).
+    private static int getSolidWidth(BuildingType type, int fallbackWidth) {
+        if (type == BuildingType.SMALL_HOUSE) {
+            // smhouse.png dindingnya cuma ~36px, jauh lebih sempit dari pondasi (70px).
+            // Kalau dipaksa selebar pondasi, warga/pasukan jadi kehalang rumput kosong di kiri-kanan rumah.
+            return 34;
+        }
+        if (type == BuildingType.HEART) {
+            // Heart.png lebar totalnya ~158px, termasuk sayap dinding kiri-kanan yang menyambung.
+            // Sayap itu ikut solid (bagian depan bangunan), makanya lebar hitbox harus dilebarkan,
+            // bukan cuma selebar pondasi tengah (80px) seperti sebelumnya.
+            // (Disisakan ~4px di tiap sisi karena tepi gambarnya sedikit transparan/miring, bukan dinding solid.)
+            return 150;
+        }
+        // Tipe lain (MEDIUM_HOUSE, BIG_HOUSE, STORAGE, BARRACK, WALL) sudah proporsional
+        // antara lebar gambar & lebar pondasinya -> tidak diubah.
+        // (FARM ditangani terpisah di computeSolidHitbox() - full gambar solid.)
+        return fallbackWidth;
+    }
+
+    // Tinggi bagian depan (dinding+pintu) yang solid. Bagian atas (atap = "belakang" bangunan)
+    // sengaja TIDAK solid supaya warga & militer bisa jalan seolah-olah di belakang bangunan.
+    private static int getSolidHeight(BuildingType type, int fallbackHeight) {
+        // Sudah pas untuk semua tipe saat ini, dipertahankan seperti semula.
+        return (int) (fallbackHeight * 0.40);
     }
 
 
