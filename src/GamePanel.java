@@ -374,38 +374,12 @@ public class GamePanel extends JPanel {
                 int w = getWidth();
                 int h = getHeight();
                 if(topRightBar != null && bottomLeftBar != null) {
-                    // --- FIX: LEBAR DIPERSEMPIT JADI 830 AGAR PAS DENGAN LOGO DAN RAPIH ---
                     topRightBar.setBounds(w - 830, 0, 830, 40);
                     menuBtn.setBounds(topRightBar.getWidth() - 40, 4, 32, 32);
-
-                    // Posisi Wadah Tombol dipindah ke ATAS Minimap (tinggi wadah 80px)
                     bottomLeftBar.setBounds(15, h - 310, 180, 80);
-
-                    // Grid Menu tetap di sebelah minimap
                     if (gridMenuPanel != null) gridMenuPanel.setBounds(230, h - 200, 240, 180);
                 }
-
-                // --- TAMBAHAN: Center kamera ke Heart begitu ukuran panel valid ---
-                if (!cameraInitialized && w > 0 && h > 0) {
-                    camera.centerOn(
-                            heart.getBounds().getCenterX(),
-                            heart.getBounds().getCenterY(),
-                            w,
-                            h
-                    );
-                    cameraInitialized = true;
-                    repaint();
-                }
             }
-        });
-
-        SwingUtilities.invokeLater(() -> {
-            camera.centerOn(
-                    1500,
-                    1500,
-                    getWidth(),
-                    getHeight()
-            );
         });
     }
 
@@ -1274,6 +1248,13 @@ public class GamePanel extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+
+
+        // --- Center kamera ke Heart begitu panel pertama kali digambar dengan ukuran final ---
+        if (!cameraInitialized && getWidth() > 0 && getHeight() > 0) {
+            camera.centerOn(1500, 1500, getWidth(), getHeight());
+            cameraInitialized = true;
+        }
 
         camera.clamp(getWidth(), getHeight(), 3000, 3000);
         Graphics2D g2d = (Graphics2D) g.create();

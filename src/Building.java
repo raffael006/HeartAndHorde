@@ -96,7 +96,7 @@ public class Building implements Serializable {
 
     // Pusat Data: Lebar Visual Gambar PNG
     public static int getVisualWidth(BuildingType type) {
-        if (type == BuildingType.HEART) return 400;
+        if (type == BuildingType.HEART) return 138 +20;
         if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 10;
         if (type == BuildingType.SMALL_HOUSE) return 36;
         if (type == BuildingType.MEDIUM_HOUSE) return 66;
@@ -110,7 +110,7 @@ public class Building implements Serializable {
 
     // Pusat Data: Tinggi Visual Gambar PNG (Termasuk atap)
     public static int getVisualHeight(BuildingType type) {
-        if (type == BuildingType.HEART) return 300;
+        if (type == BuildingType.HEART) return 96 +20;
         if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 28;
         if (type == BuildingType.SMALL_HOUSE) return 69;
         if (type == BuildingType.MEDIUM_HOUSE) return 69;

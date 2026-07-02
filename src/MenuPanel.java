@@ -445,8 +445,21 @@ public class MenuPanel extends JPanel {
                     updateLoadBoxUI(); isOverlayOpen = true; menuBox.setVisible(false); loadBox.setVisible(true); repaint();
                     break;
                 case "CAMPAIGN":
-                    // --- MENGGUNAKAN FUNGSI FADE TO BLACK ---
-                    startFadeTransition(() -> window.savedBuildings.clear());
+                    startFadeTransition(() -> {
+                        window.savedBuildings.clear();
+                        int heartSize = 80;
+                        int mapCenter = 3000 / 2;
+                        Building heart = new Building(
+                                mapCenter - heartSize / 2,
+                                mapCenter - heartSize / 2,
+                                heartSize,
+                                heartSize,
+                                Building.BuildingType.HEART,
+                                5
+                        );
+                        heart.isBuilt = true;
+                        window.savedBuildings.add(heart);
+                    });
                     break;
                 case "OPTIONS":
                     isOverlayOpen = true; menuBox.setVisible(false); optionsBox.setVisible(true); repaint();
