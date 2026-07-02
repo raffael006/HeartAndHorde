@@ -799,6 +799,8 @@ public class GamePanel extends JPanel {
 
     private int getBuildCapacity(Building.BuildingType type) {
         if (type == Building.BuildingType.WALL_L || type == Building.BuildingType.WALL_R || type == Building.BuildingType.WALL_UD) return 0; // Tembok tidak menampung Civil
+        if (type == Building.BuildingType.FARM) return 0;    // Farm tempat kerja, bukan tempat tinggal -> tidak spawn Civil
+        if (type == Building.BuildingType.STORAGE) return 0; // Storage cuma gudang -> tidak spawn Civil
         if (type == Building.BuildingType.SMALL_HOUSE) return 2;
         if (type == Building.BuildingType.BIG_HOUSE) return 8;
         return 4;
