@@ -7,6 +7,7 @@ public class Camera {
     private double zoom = 2.0;
     private final int panSpeed = 20;
 
+
     // --- 1. Logika Geser (WASD) ---
     public boolean move(boolean w, boolean s, boolean a, boolean d) {
         boolean moved = false;
@@ -66,5 +67,16 @@ public class Camera {
     // --- 6. Akses Posisi untuk Minimap ---
     public double getX() { return x; }
     public double getY() { return y; }
-    public double getZoom() { return zoom; }
+    public double getZoom() {
+        return zoom;
+    }
+
+    public void centerOn(double worldX, double worldY,
+                         int screenWidth,
+                         int screenHeight) {
+
+        x = screenWidth / 2.0 - worldX * zoom;
+        y = screenHeight / 2.0 - worldY * zoom;
+    }
+
 }

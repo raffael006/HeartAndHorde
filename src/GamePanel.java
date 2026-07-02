@@ -9,7 +9,6 @@ import java.io.ObjectOutputStream;
 import java.util.List;
 import java.awt.geom.Rectangle2D;
 
-
 public class GamePanel extends JPanel {
     private GameWindow window; // Referensi ke Bos
     private BufferedImage gameplayBg;
@@ -30,6 +29,8 @@ public class GamePanel extends JPanel {
     private BufferedImage farmImg;
     private BufferedImage storageImg;
     private BufferedImage barrackImg;
+    private BufferedImage underConstructionImg;
+    private BufferedImage heartImg;
 
     // --- ADT Kamera ---
     private Camera camera = new Camera();
@@ -49,9 +50,9 @@ public class GamePanel extends JPanel {
     private boolean isDraggingWall = false;
     private Point dragStartPoint = new Point();
     private Point dragCurrentPoint = new Point();
-    public java.util.List<Mine> activeMines = new java.util.ArrayList<>();
+    public List<Mine> activeMines = new java.util.ArrayList<>();
     private Mine clickedMine = null;
-
+    private boolean cameraInitialized = false;
 
     // --- Variabel UI/HUD ---
     private JPanel bottomLeftBar;
@@ -87,7 +88,7 @@ public class GamePanel extends JPanel {
 
     //===============================TREE====================================================
     // Hashtable (Spatial Hash) untuk menyimpan pohon berdasarkan petak Kavling
-    public java.util.HashMap<String, java.util.List<Tree>> mapPohon = new java.util.HashMap<>();
+    public java.util.HashMap<String, List<Tree>> mapPohon = new java.util.HashMap<>();
     // Variabel untuk menyimpan gambar pohon
     private BufferedImage treeImg;
     //===================================================================================
@@ -101,6 +102,28 @@ public class GamePanel extends JPanel {
 
         // Panggil fungsi pembuat tambang
         generateMines();
+
+        // Posisi tengah map (map 3000 x 3000)
+        int heartSize = 80;
+        int mapCenter = 3000 / 2;
+        Building heart = new Building(
+                mapCenter - heartSize / 2,
+                mapCenter - heartSize / 2,
+                heartSize,
+                heartSize,
+                Building.BuildingType.HEART,
+                5
+        );
+
+        heart.isBuilt = true;
+        window.savedBuildings.add(heart);
+        System.out.println(heart.getBounds());
+        System.out.println("Jumlah building: " + window.savedBuildings.size());
+
+
+        for (int i = 0; i < 5; i++) {
+            window.activeCivils.add(new Civil(1500, 1500));
+        }
 
         try {
             abandonedMineImg = ImageIO.read(new File("assets/img/abandoned_mine.png"));
@@ -123,8 +146,16 @@ public class GamePanel extends JPanel {
             farmImg = ImageIO.read(new File("assets/img/farm.png"));
             storageImg = ImageIO.read(new File("assets/img/storage.png"));
             barrackImg = ImageIO.read(new File("assets/img/barrack.png"));
+            underConstructionImg = ImageIO.read(new File("assets/img/building.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Gambar Rumah!");
+        }
+
+        try {
+            heartImg = ImageIO.read(new File("assets/img/Heart.png"));
+            System.out.println(heartImg);
+        } catch (Exception e) {
+            System.out.println("Gagal memuat Heart!");
         }
 
         try {
@@ -249,7 +280,7 @@ public class GamePanel extends JPanel {
             window.activeHordes.removeIf(h -> h.currentHp <= 0);
 
             // --- LOGIKA PROGRESS TEBANG POHON ---
-            for (java.util.List<Tree> daftarPohon : mapPohon.values()) {
+            for (List<Tree> daftarPohon : mapPohon.values()) {
                 // Kita pakai Iterator agar aman menghapus pohon dari daftar saat sedang di-loop
                 java.util.Iterator<Tree> it = daftarPohon.iterator();
                 while (it.hasNext()) {
@@ -271,6 +302,15 @@ public class GamePanel extends JPanel {
             }
             // Bersihkan jika sudah hancur total
             window.savedBuildings.removeIf(b -> b.isDemolishing && b.demolishProgress >= b.maxDemolish);
+
+            for (Building b : window.savedBuildings) {
+                if (!b.isBuilt) {
+                    b.buildProgress += 1.0f; // Kecepatan bangun (semakin besar semakin cepat)
+                    if (b.buildProgress >= b.maxBuild) {
+                        b.isBuilt = true; // Selesai! Wujud steger akan berubah jadi bangunan asli
+                    }
+                }
+            }
 
             // --- LOGIKA PROGRESS PEMBANGUNAN TAMBANG ---
             for (Mine m : activeMines) {
@@ -344,7 +384,28 @@ public class GamePanel extends JPanel {
                     // Grid Menu tetap di sebelah minimap
                     if (gridMenuPanel != null) gridMenuPanel.setBounds(230, h - 200, 240, 180);
                 }
+
+                // --- TAMBAHAN: Center kamera ke Heart begitu ukuran panel valid ---
+                if (!cameraInitialized && w > 0 && h > 0) {
+                    camera.centerOn(
+                            heart.getBounds().getCenterX(),
+                            heart.getBounds().getCenterY(),
+                            w,
+                            h
+                    );
+                    cameraInitialized = true;
+                    repaint();
+                }
             }
+        });
+
+        SwingUtilities.invokeLater(() -> {
+            camera.centerOn(
+                    1500,
+                    1500,
+                    getWidth(),
+                    getHeight()
+            );
         });
     }
 
@@ -499,7 +560,7 @@ public class GamePanel extends JPanel {
                                     double finalTargetX = worldPos.x + startOffsetX + (col * spacing) - (g.size / 2.0);
                                     double finalTargetY = worldPos.y + startOffsetY + (row * spacing) - (g.size / 2.0);
 
-                                    java.util.List<Point> calculatedPath = PathFinder.findPath(
+                                    List<Point> calculatedPath = PathFinder.findPath(
                                             g.x + (g.size/2.0), g.y + (g.size/2.0),
                                             finalTargetX + (g.size/2.0), finalTargetY + (g.size/2.0),
                                             window.savedBuildings
@@ -608,7 +669,7 @@ public class GamePanel extends JPanel {
 
                 // --- LOGIKA TEBANG POHON ---
                 if (currentTool == ToolMode.CHOP_WOOD) {
-                    for (java.util.List<Tree> daftarPohon : mapPohon.values()) {
+                    for (List<Tree> daftarPohon : mapPohon.values()) {
                         for (Tree pohon : daftarPohon) {
                             if (pohon.getBounds().contains(worldPos)) {
                                 pohon.isHarvesting = true; // Pohon mulai ditebang!
@@ -765,6 +826,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.FARM) return farmImg;
         if (type == Building.BuildingType.STORAGE) return storageImg;
         if (type == Building.BuildingType.BARRACK) return barrackImg;
+        if (type == Building.BuildingType.HEART) return heartImg;
         return mediumHouseImg;
     }
 
@@ -1240,16 +1302,22 @@ public class GamePanel extends JPanel {
 
         }
 
-        java.util.List<RenderItem> renderList = new java.util.ArrayList<>();
+        List<RenderItem> renderList = new java.util.ArrayList<>();
 
         for (Building b : window.savedBuildings) {
-            BufferedImage img = getBuildImage(b.type);
+            BufferedImage finishedImg = getBuildImage(b.type);
             renderList.add(new RenderItem(b.getBounds().getY() + b.getBounds().getHeight(), () -> {
-                b.draw(g2d, img);
+                if (b.type == Building.BuildingType.HEART) {
+                    System.out.println("Heart ditemukan, img = " + finishedImg);
+                }
+                // MENGIRIM 2 GAMBAR SEKALIGUS KE BUILDING.JAVA
+                b.draw(g2d, underConstructionImg, finishedImg);
+
                 // --- EFEK HIGHLIGHT KUNING JIKA DIKLIK ---
                 if (b == clickedBuilding) {
                     g2d.setColor(new Color(255, 255, 0, 70)); // Kuning transparan
-                    g2d.fillRect(b.getBounds().x, b.getBounds().y, b.getBounds().width, b.getBounds().height);
+                    Rectangle hitbox = b.getSolidHitbox(); // Ambil ukuran pondasinya saja
+                    g2d.fillRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
                 }
             }));
         }
@@ -1276,7 +1344,7 @@ public class GamePanel extends JPanel {
 
         // 5. Masukkan Pohon dari Hashtable
         // Kita ambil semua daftar pohon yang ada di dalam mapPohon
-        for (java.util.List<Tree> daftarPohon : mapPohon.values()) {
+        for (List<Tree> daftarPohon : mapPohon.values()) {
             for (Tree pohon : daftarPohon) {
                 // bottomY pohon adalah posisi Y ditambah tinggi pohon
                 renderList.add(new RenderItem(pohon.y + pohon.height, () -> pohon.draw(g2d, treeImg)));
@@ -1369,14 +1437,18 @@ public class GamePanel extends JPanel {
             // Biar saat pindah bangunan (Move) dia gak mendeteksi nabrak dirinya sendiri
             Building ignoreB = (currentTool == ToolMode.MOVE) ? holdingBuilding : null;
 
+            // --- HITUNG UKURAN PONDASI (MENGKOPY LOGIKA DARI getSolidHitbox) ---
+            int solidH = (int) (bw * 0.40);
+            int solidY = pY + bw - solidH;
+
             if (isOverlapping(previewRect, ignoreB)) {
                 g2d.setColor(new Color(255, 0, 0, 150));
-                g2d.fillRect(pX, pY, bw, bw);
+                // HANYA GAMBAR AREA MERAH DI PONDASI BAWAHNYA SAJA!
+                g2d.fillRect(pX, solidY, bw, solidH);
             } else {
                 if (previewImg != null) {
                     Building.BuildingType typeToDraw = (currentTool == ToolMode.BUILD) ? selectedBuilding : holdingBuilding.type;
 
-                    // MINTA DATA UKURAN KE BUILDING.JAVA (DRY Principle)
                     int drawW = Building.getVisualWidth(typeToDraw);
                     int drawH = Building.getVisualHeight(typeToDraw);
 
@@ -1386,7 +1458,7 @@ public class GamePanel extends JPanel {
                     g2d.drawImage(previewImg, drawX, drawY, drawW, drawH, null);
                 } else {
                     g2d.setColor(new Color(200, 200, 200, 150));
-                    g2d.fillRect(pX, pY, bw, bw);
+                    g2d.fillRect(pX, solidY, bw, solidH);
                 }
             }
         }
@@ -1513,7 +1585,7 @@ public class GamePanel extends JPanel {
                 String kunciKavling = gridX + "," + gridY;
 
                 // 2. Buat "LinkedList/ArrayList" kosong untuk petak ini
-                java.util.List<Tree> daftarPohon = new java.util.ArrayList<>();
+                List<Tree> daftarPohon = new java.util.ArrayList<>();
 
                 // 3. Lempar dadu nasib untuk kavling ini (Angka acak 1, 2, atau 3)
                 int nasib = (int)(Math.random() * 3) + 1;

@@ -11,12 +11,15 @@ public class Building implements Serializable {
     // --- FITUR BARU: TIPE BANGUNAN DINAMIS ---
     public enum BuildingType {
         SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE, WALL_L, WALL_R, WALL_UD,
-        FARM, STORAGE, BARRACK
+        FARM, STORAGE, BARRACK, HEART
     }
     public BuildingType type;
 
     public int maxCapacity;
     public List<Civil> occupants;
+    public boolean isBuilt = false;      // Saat baru ditaruh, default-nya belum jadi
+    public float buildProgress = 0f;
+    public float maxBuild = 100f;
 
     public boolean isDemolishing = false;
     public float demolishProgress = 0f;
@@ -36,23 +39,51 @@ public class Building implements Serializable {
     }
     public void exitBuilding(Civil civil) { occupants.remove(civil); }
 
-    public void draw(Graphics2D g2d, BufferedImage img) {
-        if (img != null) {
-            // LANGSUNG AMBIL DARI PUSAT DATA!
-            int drawWidth = getVisualWidth(type);
-            int drawHeight = getVisualHeight(type);
+    public void draw(Graphics2D g2d, BufferedImage constructionImg, BufferedImage finishedImg) {
+        if (!isBuilt) {
+            // --- RENDER STEGER PEMBANGUNAN HANYA DI AREA COLLISION (PONDASI) ---
+            Rectangle hitbox = getSolidHitbox();
+            if (constructionImg != null) {
+                g2d.drawImage(constructionImg, hitbox.x, hitbox.y, hitbox.width, hitbox.height, null);
+            }
 
-            // Tambahkan "bounds." untuk mengakses x, y, width, dan height
-            int drawX = bounds.x - ((drawWidth - bounds.width) / 2);
-            int drawY = bounds.y - (drawHeight - bounds.height);
+            // --- RENDER LOADING BAR HIJAU ---
+            int barW = hitbox.width;
+            int barH = 5;
+            int barX = hitbox.x;
+            int barY = hitbox.y - 10; // Melayang sedikit di atas pondasi
 
-            g2d.drawImage(img, drawX, drawY, drawWidth, drawHeight, null);
+            g2d.setColor(new Color(0, 0, 0, 150));
+            g2d.fillRect(barX, barY, barW, barH);
+            g2d.setColor(new Color(50, 205, 50));
+            int fillW = (int) ((buildProgress / maxBuild) * barW);
+            g2d.fillRect(barX, barY, fillW, barH);
+
+        } else {
+            // --- RENDER BANGUNAN ASLI (Menjulang tinggi ke atas 2.5D) ---
+            if (finishedImg != null) {
+                int drawWidth = getVisualWidth(type);
+                int drawHeight = getVisualHeight(type);
+
+                int drawX = bounds.x - ((drawWidth - bounds.width) / 2);
+                int drawY = bounds.y - (drawHeight - bounds.height);
+                if (type == BuildingType.HEART) {
+                    System.out.println("drawX=" + drawX +
+                            " drawY=" + drawY +
+                            " width=" + drawWidth +
+                            " height=" + drawHeight);
+                }
+
+                g2d.drawImage(finishedImg, drawX, drawY, drawWidth, drawHeight, null);
+            }
         }
 
+        // --- RENDER LOADING BAR MERAH SAAT DIHANCURKAN ---
         if (isDemolishing) {
+            Rectangle hitbox = getSolidHitbox(); // Posisi loading mengikuti pondasi bawah
             int barW = 30; int barH = 5;
-            int barX = bounds.x + (bounds.width - barW) / 2;
-            int barY = bounds.y - 10;
+            int barX = hitbox.x + (hitbox.width - barW) / 2;
+            int barY = hitbox.y - 10;
 
             g2d.setColor(new Color(0, 0, 0, 150));
             g2d.fillRect(barX, barY, barW, barH);
@@ -65,6 +96,7 @@ public class Building implements Serializable {
 
     // Pusat Data: Lebar Visual Gambar PNG
     public static int getVisualWidth(BuildingType type) {
+        if (type == BuildingType.HEART) return 400;
         if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 10;
         if (type == BuildingType.SMALL_HOUSE) return 36;
         if (type == BuildingType.MEDIUM_HOUSE) return 66;
@@ -78,11 +110,12 @@ public class Building implements Serializable {
 
     // Pusat Data: Tinggi Visual Gambar PNG (Termasuk atap)
     public static int getVisualHeight(BuildingType type) {
+        if (type == BuildingType.HEART) return 300;
         if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 28;
         if (type == BuildingType.SMALL_HOUSE) return 69;
         if (type == BuildingType.MEDIUM_HOUSE) return 69;
         if (type == BuildingType.BIG_HOUSE) return 80;
-        if (type == BuildingType.FARM) return 61;    // Sesuaikan tinggi farm.png
+        if (type == BuildingType.FARM) return 61; // Sesuaikan tinggi farm.png
         if (type == BuildingType.STORAGE) return 45; // Sesuaikan tinggi storage.png
         if (type == BuildingType.BARRACK) return 71;
         return 70;
