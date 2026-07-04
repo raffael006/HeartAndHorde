@@ -7,11 +7,12 @@ import java.util.List;
 public class Building implements Serializable {
     private static final long serialVersionUID = 1L;
     private Rectangle bounds;
+    public CivilBuilder assignedBuilder = null;
 
     // --- FITUR BARU: TIPE BANGUNAN DINAMIS ---
     public enum BuildingType {
         SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE, WALL_L, WALL_R, WALL_UD,
-        FARM, STORAGE, BARRACK, HEART
+        FARM, STORAGE, BARRACK, HEART, BUILDER   // <-- tambah BUILDER
     }
     public BuildingType type;
 
@@ -105,6 +106,8 @@ public class Building implements Serializable {
         if (type == BuildingType.FARM) return 108;    // Sesuaikan lebar farm.png
         if (type == BuildingType.STORAGE) return 70; // Sesuaikan lebar storage.png
         if (type == BuildingType.BARRACK) return 114; // Sesuaikan lebar barrack.png
+        if (type == BuildingType.BUILDER) return 90;   // di getVisualWidth
+
         return 70;
     }
 
@@ -118,6 +121,7 @@ public class Building implements Serializable {
         if (type == BuildingType.FARM) return 61; // Sesuaikan tinggi farm.png
         if (type == BuildingType.STORAGE) return 45; // Sesuaikan tinggi storage.png
         if (type == BuildingType.BARRACK) return 71;
+        if (type == BuildingType.BUILDER) return 70;   // di getVisualHeight
         return 70;
     }
 

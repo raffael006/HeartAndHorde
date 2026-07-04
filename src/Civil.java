@@ -40,6 +40,7 @@ public class Civil implements Serializable {
     }
 
     public void update() {
+
         long currentTime = System.currentTimeMillis();
 
         // 1. Timer Keputusan (Ganti aksi jika waktunya habis)
@@ -80,6 +81,7 @@ public class Civil implements Serializable {
             }
         }
     }
+
 
     public void draw(Graphics2D g2d, BufferedImage img) {
         if (img != null) {

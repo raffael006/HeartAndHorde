@@ -31,6 +31,7 @@ public class GamePanel extends JPanel {
     private BufferedImage barrackImg;
     private BufferedImage underConstructionImg;
     private BufferedImage heartImg;
+    private BufferedImage builderImg;
 
     // --- ADT Kamera ---
     private Camera camera = new Camera();
@@ -68,6 +69,7 @@ public class GamePanel extends JPanel {
     private Building.BuildingType selectedBuilding = Building.BuildingType.MEDIUM_HOUSE;
     private JPanel gridMenuPanel;
     private Building clickedBuilding = null;
+    private BufferedImage civilBuilderImg;
 
     // Kita ubah jadi Width agar dia meluncur/mengembang ke kanan
     private double currentSubWidth = 0.0;
@@ -86,6 +88,10 @@ public class GamePanel extends JPanel {
     private int currentDay = 1;
     public int totalWood = 0;
 
+    private FogOfWar fogOfWar;
+    private static final float HEART_REVEAL_RADIUS = 500f;
+    private static final float GUARD_REVEAL_RADIUS = 300f;
+
     //===============================TREE====================================================
     // Hashtable (Spatial Hash) untuk menyimpan pohon berdasarkan petak Kavling
     public java.util.HashMap<String, List<Tree>> mapPohon = new java.util.HashMap<>();
@@ -103,6 +109,7 @@ public class GamePanel extends JPanel {
         // Panggil fungsi pembuat tambang
         generateMines();
 
+
         // Posisi tengah map (map 3000 x 3000)
         int heartSize = 80;
         int mapCenter = 3000 / 2;
@@ -114,6 +121,8 @@ public class GamePanel extends JPanel {
                 Building.BuildingType.HEART,
                 5
         );
+        fogOfWar = new FogOfWar(3000, 3000);
+        fogOfWar.reveal(heart.getBounds().getCenterX(), heart.getBounds().getCenterY(), HEART_REVEAL_RADIUS);
 
         heart.isBuilt = true;
         window.savedBuildings.add(heart);
@@ -175,6 +184,7 @@ public class GamePanel extends JPanel {
 
         try {
             civilImg = ImageIO.read(new File("assets/img/civil_h&h.png"));
+            civilBuilderImg = ImageIO.read(new File("assets/img/Civil_Builder.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Civil!");
         }
@@ -187,13 +197,27 @@ public class GamePanel extends JPanel {
             e.printStackTrace();
         }
 
+        try{
+            builderImg = ImageIO.read(new File("assets/img/builder.png"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
         cameraTimer = new Timer(16, e -> {
             boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
+
+
+            for (CivilBuilder cb : window.activeCivilBuilders) {
+                cb.update();
+            }
 
             // 1. Update Guards (Parameter Nambah)
             for (Guard g : window.activeGuards) {
                 g.update(window.activeGuards, window.activeHordes, window.activeProjectiles);
+                fogOfWar.revealIfMoved(g, g.x, g.y, GUARD_REVEAL_RADIUS);
             }
+            fogOfWar.update();
 
             // 2. Update Hordes (Parameter Nambah)
             for (Horde h : window.activeHordes) {
@@ -304,10 +328,12 @@ public class GamePanel extends JPanel {
             window.savedBuildings.removeIf(b -> b.isDemolishing && b.demolishProgress >= b.maxDemolish);
 
             for (Building b : window.savedBuildings) {
-                if (!b.isBuilt) {
-                    b.buildProgress += 1.0f; // Kecepatan bangun (semakin besar semakin cepat)
-                    if (b.buildProgress >= b.maxBuild) {
-                        b.isBuilt = true; // Selesai! Wujud steger akan berubah jadi bangunan asli
+                if (!b.isBuilt && b.assignedBuilder == null) {
+                    for (CivilBuilder cb : window.activeCivilBuilders) {
+                        if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
+                            cb.assignToBuild(b, window.savedBuildings);
+                            break;
+                        }
                     }
                 }
             }
@@ -666,13 +692,21 @@ public class GamePanel extends JPanel {
 
                     } else if (!isOverlapping(newArea, null) && !isTreeBlocking(newArea)) {
                         int cap = getBuildCapacity(selectedBuilding);
-                        window.savedBuildings.add(new Building(targetX, targetY, bw, bw, selectedBuilding, cap));
+                        Building newBuilding = new Building(targetX, targetY, bw, bw, selectedBuilding, cap);
+                        window.savedBuildings.add(newBuilding);
 
-                        // Spawn Warga sesuai kapasitas!
                         double spawnPointX = targetX + (bw / 2.0);
                         double spawnPointY = targetY + (bw / 2.0);
-                        for(int i = 0; i < cap; i++) {
-                            window.activeCivils.add(new Civil(spawnPointX, spawnPointY));
+
+                        if (selectedBuilding == Building.BuildingType.BUILDER) {
+                            // Builder House -> isinya CivilBuilder, bukan Civil biasa
+                            for (int i = 0; i < cap; i++) {
+                                window.activeCivilBuilders.add(new CivilBuilder(spawnPointX, spawnPointY, newBuilding));
+                            }
+                        } else {
+                            for (int i = 0; i < cap; i++) {
+                                window.activeCivils.add(new Civil(spawnPointX, spawnPointY));
+                            }
                         }
                     }
                 }
@@ -803,6 +837,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.STORAGE) return 0; // Storage cuma gudang -> tidak spawn Civil
         if (type == Building.BuildingType.SMALL_HOUSE) return 2;
         if (type == Building.BuildingType.BIG_HOUSE) return 8;
+        if (type == Building.BuildingType.BUILDER) return 2;
         return 4;
     }
 
@@ -816,6 +851,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.STORAGE) return storageImg;
         if (type == Building.BuildingType.BARRACK) return barrackImg;
         if (type == Building.BuildingType.HEART) return heartImg;
+        if (type == Building.BuildingType.BUILDER) return builderImg;
         return mediumHouseImg;
     }
 
@@ -837,6 +873,7 @@ public class GamePanel extends JPanel {
             boolean isChop = (currentTool == ToolMode.CHOP_WOOD);
             boolean isFarm = (selectedBuilding == Building.BuildingType.FARM);
             boolean isStorage = (selectedBuilding == Building.BuildingType.STORAGE);
+            boolean isBuilderSel = (selectedBuilding == Building.BuildingType.BUILDER);
 
 
             // Hanya Emoji Tanpa Teks
@@ -856,8 +893,14 @@ public class GamePanel extends JPanel {
             }, isChop));
             gridMenuPanel.add(createGridBtn("🌾", () -> { selectedBuilding = Building.BuildingType.FARM; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isFarm));
             gridMenuPanel.add(createGridBtn("📦", () -> { selectedBuilding = Building.BuildingType.STORAGE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isStorage));
+            gridMenuPanel.add(createGridBtn("👷", () -> {
+                selectedBuilding = Building.BuildingType.BUILDER;
+                currentTool = ToolMode.BUILD;
+                updateGridMenu();
+                repaint();
+            }, isBuilderSel));
 
-            for(int i=0; i<7; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            for(int i=0; i<6; i++) gridMenuPanel.add(createGridBtn("", null, false));
             gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));
         }
         else if (currentMenuState == MenuState.MILITARY_MENU) {
@@ -1273,6 +1316,8 @@ public class GamePanel extends JPanel {
 
         camera.clamp(getWidth(), getHeight(), 3000, 3000);
         Graphics2D g2d = (Graphics2D) g.create();
+
+
         camera.applyTransform(g2d);
 
         if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 3000, null);
@@ -1321,6 +1366,13 @@ public class GamePanel extends JPanel {
         for (Civil c : window.activeCivils) {
             renderList.add(new RenderItem(c.y + c.size, () -> c.draw(g2d, civilImg)));
         }
+
+        for (CivilBuilder cb : window.activeCivilBuilders) {
+            if (cb.state != CivilBuilder.BuilderState.IDLE_HOME) { // Cuma kelihatan kalau lagi keluar rumah
+                renderList.add(new RenderItem(cb.y + cb.size, () -> cb.draw(g2d, civilBuilderImg)));
+            }
+        }
+
         // 3. Masukkan Guard
         for (Guard hg : window.activeGuards) {
             BufferedImage spriteToUse = (hg.type == Guard.GuardType.ARCHER) ? archerImg : spearmanImg;
@@ -1397,7 +1449,11 @@ public class GamePanel extends JPanel {
         int pY = Math.round((float) rawY / 10f) * 10;
 
         Rectangle previewRect = new Rectangle(pX, pY, bw, bw);
-
+        int viewX = (int) (-camera.getX() / camera.getZoom());
+        int viewY = (int) (-camera.getY() / camera.getZoom());
+        int viewW = (int) (getWidth() / camera.getZoom());
+        int viewH = (int) (getHeight() / camera.getZoom());
+        fogOfWar.draw(g2d, new Rectangle(viewX, viewY, viewW, viewH));
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
 
         if (isDraggingWall) {

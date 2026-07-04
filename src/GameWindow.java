@@ -15,6 +15,7 @@ public class GameWindow extends JFrame {
     public List<Horde> activeHordes = new LinkedList<>();
     public List<Projectile> activeProjectiles = new LinkedList<>();
     public List<Civil> activeCivils = new LinkedList<>();
+    public List<CivilBuilder> activeCivilBuilders = new LinkedList<>();
 
     public GameWindow() {
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");
