@@ -55,11 +55,13 @@ public class GamePanel extends JPanel {
     private Mine clickedMine = null;
     private boolean cameraInitialized = false;
 
+    // --- TAMBAHAN BARU: Status Cheat Mode ---
+    private boolean isCheatModeActive = false;
+
     // --- Variabel UI/HUD ---
     private JPanel bottomLeftBar;
     private JPanel topRightBar;
     private JButton menuBtn;
-
 
     private boolean isBuildMenuExpanded = false;
     private JButton house1Btn, house2Btn, house3Btn;
@@ -75,7 +77,6 @@ public class GamePanel extends JPanel {
     private double currentSubWidth = 0.0;
     private int targetSubWidth = 0;
     private String activeCategory = ""; // Untuk melacak kategori apa yang sedang dibuka
-
 
     // Wadah tombol bangunan (Placeholder siap pakai)
     private JButton houseBtn, farmBtn, fishBtn;
@@ -108,7 +109,6 @@ public class GamePanel extends JPanel {
 
         // Panggil fungsi pembuat tambang
         generateMines();
-
 
         // Posisi tengah map (map 3000 x 3000)
         int heartSize = 80;
@@ -207,7 +207,6 @@ public class GamePanel extends JPanel {
         cameraTimer = new Timer(16, e -> {
             boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
 
-
             for (CivilBuilder cb : window.activeCivilBuilders) {
                 cb.update();
             }
@@ -245,8 +244,6 @@ public class GamePanel extends JPanel {
                         if (g.y + g.size/2 < wall.y + wall.height/2) g.y -= g.speed; else g.y += g.speed;
                     }
                 }
-
-
 
                 // 2. Cek Tabrakan Horde
                 for (Horde h : window.activeHordes) {
@@ -373,13 +370,6 @@ public class GamePanel extends JPanel {
             float targetDarkness = isDayTime ? 0.0f : MAX_DARKNESS;
             currentDarkness += (targetDarkness - currentDarkness) * 0.005f;
 
-
-
-
-
-
-
-
             repaint(); // (Ini bawaan aslinya, pastikan ini tetap di posisi paling bawah)
 
             repaint();
@@ -440,38 +430,39 @@ public class GamePanel extends JPanel {
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_X, 0), "toolDelete");
         getActionMap().put("toolDelete", new AbstractAction() { public void actionPerformed(ActionEvent e) { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); }});
 
+        // --- UPDATE PENGGUNAAN CHEAT: HANYA BISA JIKA CHEAT MODE AKTIF ---
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_K, 0), "cheatSpawnSpearman");
         getActionMap().put("cheatSpawnSpearman", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, mouseX, mouseY)); repaint();
+                if (isCheatModeActive) { window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, mouseX, mouseY)); repaint(); }
             }
         });
 
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_L, 0), "cheatSpawnArcher");
         getActionMap().put("cheatSpawnArcher", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, mouseX, mouseY)); repaint();
+                if (isCheatModeActive) { window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, mouseX, mouseY)); repaint(); }
             }
         });
 
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_7, 0), "spawnAxeman");
         getActionMap().put("spawnAxeman", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                window.activeHordes.add(new Horde(Horde.HordeType.AXEMAN, mouseX, mouseY)); repaint();
+                if (isCheatModeActive) { window.activeHordes.add(new Horde(Horde.HordeType.AXEMAN, mouseX, mouseY)); repaint(); }
             }
         });
 
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_8, 0), "spawnShield");
         getActionMap().put("spawnShield", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                window.activeHordes.add(new Horde(Horde.HordeType.SHIELDBEARER, mouseX, mouseY)); repaint();
+                if (isCheatModeActive) { window.activeHordes.add(new Horde(Horde.HordeType.SHIELDBEARER, mouseX, mouseY)); repaint(); }
             }
         });
 
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_9, 0), "spawnBowmanHorde");
         getActionMap().put("spawnBowmanHorde", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                window.activeHordes.add(new Horde(Horde.HordeType.BOWMAN, mouseX, mouseY)); repaint();
+                if (isCheatModeActive) { window.activeHordes.add(new Horde(Horde.HordeType.BOWMAN, mouseX, mouseY)); repaint(); }
             }
         });
 
@@ -479,8 +470,7 @@ public class GamePanel extends JPanel {
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_P, 0), "spawnCivil");
         getActionMap().put("spawnCivil", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                window.activeCivils.add(new Civil(mouseX, mouseY));
-                repaint();
+                if (isCheatModeActive) { window.activeCivils.add(new Civil(mouseX, mouseY)); repaint(); }
             }
         });
 
@@ -533,8 +523,6 @@ public class GamePanel extends JPanel {
                 if (bottomLeftBar != null && topRightBar != null) {
                     if (bottomLeftBar.getBounds().contains(e.getPoint()) || topRightBar.getBounds().contains(e.getPoint())) return;
                 }
-
-
 
                 // Klik Kanan (Batal / Perintah Jalan)
                 if (SwingUtilities.isRightMouseButton(e)) {
@@ -610,7 +598,6 @@ public class GamePanel extends JPanel {
 
                 Point worldPos = camera.toWorld(e.getX(), e.getY());
 
-
                 // --- LOGIKA KLIK BANGUNAN & TAMBANG UNTUK MENU DINAMIS ---
                 if (currentTool == ToolMode.NONE) {
                     boolean hitSomething = false;
@@ -655,15 +642,11 @@ public class GamePanel extends JPanel {
 
                 int bw = getBuildWidth(selectedBuilding);
 
-
-
                 int rawTargetX = worldPos.x - (bw / 2);
                 int rawTargetY = worldPos.y - (bw / 2);
 
                 int targetX = Math.round((float) rawTargetX / 10f) * 10;
                 int targetY = Math.round((float) rawTargetY / 10f) * 10;
-
-
 
                 Rectangle newArea = new Rectangle(targetX, targetY, bw, bw);
 
@@ -690,23 +673,33 @@ public class GamePanel extends JPanel {
                         dragCurrentPoint.x = targetX;
                         dragCurrentPoint.y = targetY;
 
-                    } else if (!isOverlapping(newArea, null) && !isTreeBlocking(newArea)) {
-                        int cap = getBuildCapacity(selectedBuilding);
-                        Building newBuilding = new Building(targetX, targetY, bw, bw, selectedBuilding, cap);
-                        window.savedBuildings.add(newBuilding);
+                    } else {
+                        // --- TAMBAHAN KODE: CEK DAN KURANGI COST KAYU ---
+                        int cost = Building.getWoodCost(selectedBuilding);
+                        if (totalWood >= cost) {
+                            if (!isOverlapping(newArea, null) && !isTreeBlocking(newArea)) {
+                                totalWood -= cost; // Bayar kayunya
 
-                        double spawnPointX = targetX + (bw / 2.0);
-                        double spawnPointY = targetY + (bw / 2.0);
+                                int cap = getBuildCapacity(selectedBuilding);
+                                Building newBuilding = new Building(targetX, targetY, bw, bw, selectedBuilding, cap);
+                                window.savedBuildings.add(newBuilding);
 
-                        if (selectedBuilding == Building.BuildingType.BUILDER) {
-                            // Builder House -> isinya CivilBuilder, bukan Civil biasa
-                            for (int i = 0; i < cap; i++) {
-                                window.activeCivilBuilders.add(new CivilBuilder(spawnPointX, spawnPointY, newBuilding));
+                                double spawnPointX = targetX + (bw / 2.0);
+                                double spawnPointY = targetY + (bw / 2.0);
+
+                                if (selectedBuilding == Building.BuildingType.BUILDER) {
+                                    // Builder House -> isinya CivilBuilder, bukan Civil biasa
+                                    for (int i = 0; i < cap; i++) {
+                                        window.activeCivilBuilders.add(new CivilBuilder(spawnPointX, spawnPointY, newBuilding));
+                                    }
+                                } else {
+                                    for (int i = 0; i < cap; i++) {
+                                        window.activeCivils.add(new Civil(spawnPointX, spawnPointY));
+                                    }
+                                }
                             }
                         } else {
-                            for (int i = 0; i < cap; i++) {
-                                window.activeCivils.add(new Civil(spawnPointX, spawnPointY));
-                            }
+                            System.out.println("Kayu tidak cukup untuk membangun!");
                         }
                     }
                 }
@@ -780,9 +773,10 @@ public class GamePanel extends JPanel {
                         int endX = Math.max(dragStartPoint.x, dragCurrentPoint.x);
                         int y = dragStartPoint.y;
                         for (int x = startX; x <= endX; x += 10) {
-                            // Ujung kiri = WALL_L, sisanya = WALL_R (Sesuai idemu!)
                             Building.BuildingType type = (x == startX) ? Building.BuildingType.WALL_L : Building.BuildingType.WALL_R;
-                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
+                            int cost = Building.getWoodCost(type);
+                            if (totalWood >= cost && !isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
+                                totalWood -= cost;
                                 window.savedBuildings.add(new Building(x, y, 10, 10, type, 0));
                             }
                         }
@@ -792,7 +786,9 @@ public class GamePanel extends JPanel {
                         int endY = Math.max(dragStartPoint.y, dragCurrentPoint.y);
                         int x = dragStartPoint.x;
                         for (int y = startY; y <= endY; y += 10) {
-                            if (!isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
+                            int cost = Building.getWoodCost(Building.BuildingType.WALL_UD);
+                            if (totalWood >= cost && !isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
+                                totalWood -= cost;
                                 window.savedBuildings.add(new Building(x, y, 10, 10, Building.BuildingType.WALL_UD, 0));
                             }
                         }
@@ -918,7 +914,6 @@ public class GamePanel extends JPanel {
             for(int i=0; i<10; i++) gridMenuPanel.add(createGridBtn("", null, false));
             gridMenuPanel.add(createGridBtn("⬅️", () -> { currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); }, false));
         }
-
 
         else if (currentMenuState == MenuState.BUILDING_SELECTED) {
             // 1. Tombol UPGRADE (Sementara cuma print log)
@@ -1272,6 +1267,18 @@ public class GamePanel extends JPanel {
         JMenuItem saveItem = new JMenuItem("Save Progress");
         JMenuItem mainMenuItem = new JMenuItem("Back to Main Menu");
 
+        // --- TAMBAHAN BARU: MENU CHEAT MODE ---
+        JCheckBoxMenuItem cheatToggleItem = new JCheckBoxMenuItem("Developer Cheat Mode");
+        cheatToggleItem.setSelected(isCheatModeActive); // Centang sesuai status saat ini
+        cheatToggleItem.addActionListener(e -> {
+            isCheatModeActive = cheatToggleItem.isSelected();
+            if (isCheatModeActive) {
+                System.out.println("Developer Cheat Mode diaktifkan!");
+            } else {
+                System.out.println("Developer Cheat Mode dimatikan.");
+            }
+        });
+
         // Fitur Save yang dihidupkan kembali!
         saveItem.addActionListener(e -> {
             String[] options = {"Slot 1", "Slot 2", "Slot 3"};
@@ -1287,6 +1294,7 @@ public class GamePanel extends JPanel {
         });
 
         popup.add(saveItem);
+        popup.add(cheatToggleItem); // Menambahkan toggle cheat ke dalam popup menu
         popup.addSeparator();
         popup.add(mainMenuItem);
         popup.show(this, getWidth() / 2 - 75, getHeight() / 2 - 50);
@@ -1307,7 +1315,6 @@ public class GamePanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-
         // --- Center kamera ke Heart begitu panel pertama kali digambar dengan ukuran final ---
         if (!cameraInitialized && getWidth() > 0 && getHeight() > 0) {
             camera.centerOn(1500, 1500, getWidth(), getHeight());
@@ -1317,13 +1324,10 @@ public class GamePanel extends JPanel {
         camera.clamp(getWidth(), getHeight(), 3000, 3000);
         Graphics2D g2d = (Graphics2D) g.create();
 
-
         camera.applyTransform(g2d);
 
         if (gameplayBg != null) g2d.drawImage(gameplayBg, 0, 0, 3000, 3000, null);
         else { g2d.setColor(new Color(30, 50, 30)); g2d.fillRect(0, 0, 3000, 3000); }
-
-
 
         if (currentTool == ToolMode.BUILD) {
             g2d.setColor(new Color(255, 255, 255, 30));
@@ -1415,7 +1419,6 @@ public class GamePanel extends JPanel {
         // Urutkan dan Gambar! (Y Kecil/Atas digambar duluan, ditimpa oleh Y Besar/Bawah)
         renderList.sort((a, b) -> Double.compare(a.bottomY, b.bottomY));
 
-
         // =======================================================
 
         for (RenderItem item : renderList) {
@@ -1426,8 +1429,6 @@ public class GamePanel extends JPanel {
         for (Projectile p : window.activeProjectiles) {
             p.draw(g2d);
         }
-
-
 
         // Render Preview Kursor (Dinamis Sesuai Tipe Bangunan)
         int bw = 90; // Default fallback
@@ -1622,8 +1623,6 @@ public class GamePanel extends JPanel {
         gMap.dispose();
 
     }
-
-
 
     private void generateForest() {
         int ukuranKavling = 1000; // Map 3000x3000 dibagi jadi petakan 1000x1000

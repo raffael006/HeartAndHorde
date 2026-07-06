@@ -125,6 +125,22 @@ public class Building implements Serializable {
         return 70;
     }
 
+    // --- FITUR BARU: BIAYA KAYU SESUAI UKURAN BANGUNAN ---
+    public static int getWoodCost(BuildingType type) {
+        if (type == BuildingType.SMALL_HOUSE) return 15;  // Cost untuk smhouse.png
+        if (type == BuildingType.MEDIUM_HOUSE) return 30; // Cost untuk mhouse.png
+        if (type == BuildingType.BIG_HOUSE) return 60;    // Cost untuk bighouse.png
+
+        // Cost buat bangunan lain sekalian diset
+        if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 2;
+        if (type == BuildingType.FARM) return 10;
+        if (type == BuildingType.STORAGE) return 5;
+        if (type == BuildingType.BARRACK) return 20;
+        if (type == BuildingType.BUILDER) return 25;
+
+        return 0; // Default (contoh: Heart) gratis
+    }
+
     public Rectangle getBounds() { return bounds; }
     public boolean contains(Point p) { return bounds.contains(p); }
     public boolean intersects(Rectangle r) { return bounds.intersects(r); }
@@ -184,6 +200,4 @@ public class Building implements Serializable {
         // Sudah pas untuk semua tipe saat ini, dipertahankan seperti semula.
         return (int) (fallbackHeight * 0.40);
     }
-
-
 }
