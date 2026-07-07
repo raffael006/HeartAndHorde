@@ -22,6 +22,11 @@ public class CivilBuilder implements Serializable {
     public int pathIndex = 0;
     private transient List<Building> buildingsRef; // Buat referensi pathfinding pulang
 
+    // --- FITUR BARU: ANTREAN BANGUNAN ---
+    // Daftar bangunan lain yang menunggu digarap oleh builder ini setelah yang sekarang selesai.
+    // FIFO (First In First Out) -> yang dipesan duluan, dikerjakan duluan.
+    public List<Building> buildQueue = new java.util.LinkedList<>();
+
     public CivilBuilder(double homeX, double homeY, Building homeBuilding) {
         this.homeX = homeX;
         this.homeY = homeY;
@@ -35,6 +40,26 @@ public class CivilBuilder implements Serializable {
         this.pathIndex = 0;
     }
 
+    // --- FIX UMUM PATHFINDING (menggantikan fix sementara sebelumnya) ---
+    // Builder tidak boleh menganggap (1) bangunan yang sedang dia TUJU, atau
+    // (2) bangunan yang hitbox-nya kebetulan menutupi POSISI builder SAAT INI
+    // (misalnya baru selesai bangun FARM dan masih berdiri persis di atasnya)
+    // sebagai tembok penghalang jalan. Kalau tidak difilter, builder bisa "terkurung"
+    // oleh hitbox-nya sendiri -> PathFinder gagal kasih jalan (path kosong) -> builder
+    // dianggap "sudah sampai" padahal belum gerak sama sekali, atau malah hilang dari
+    // layar karena statusnya keburu balik IDLE_HOME padahal fisiknya masih nyangkut.
+    private List<Building> buildSafeObstacleList(List<Building> allBuildings, Building extraExclude) {
+        List<Building> result = new java.util.ArrayList<>();
+        if (allBuildings == null) return result;
+        Point myPos = new Point((int) x, (int) y);
+        for (Building b : allBuildings) {
+            if (b == extraExclude) continue;
+            if (b.getSolidHitbox().contains(myPos)) continue; // Lagi nginjek/di dalam hitbox ini -> jangan dianggap tembok
+            result.add(b);
+        }
+        return result;
+    }
+
     // Dipanggil dari GamePanel waktu ada bangunan butuh tukang
     public void assignToBuild(Building target, List<Building> allBuildings) {
         this.assignedBuilding = target;
@@ -43,8 +68,25 @@ public class CivilBuilder implements Serializable {
 
         double targetX = target.getBounds().getCenterX();
         double targetY = target.getBounds().getCenterY();
-        setPath(PathFinder.findPath(x, y, targetX, targetY, allBuildings));
+
+        List<Building> obstacles = buildSafeObstacleList(allBuildings, target);
+        setPath(PathFinder.findPath(x, y, targetX, targetY, obstacles));
         state = BuilderState.MOVING_TO_SITE;
+    }
+
+    // --- FITUR BARU: DIPANGGIL DARI GamePanel UNTUK MENGANTRIKAN BANGUNAN ---
+    // Kalau builder ini lagi nganggur di rumah -> langsung berangkat sekarang juga.
+    // Kalau builder ini lagi sibuk (jalan/bangun/pulang) -> taruh di antrean dulu,
+    // nanti otomatis disamperin abis kerjaan yang sekarang kelar (TANPA mampir pulang dulu).
+    public void queueBuilding(Building target, List<Building> allBuildings) {
+        target.assignedBuilder = this; // Supaya tidak direbut/ditawarkan ke builder lain selagi masih diantre
+        this.buildingsRef = allBuildings;
+
+        if (state == BuilderState.IDLE_HOME && assignedBuilding == null) {
+            assignToBuild(target, allBuildings);
+        } else {
+            buildQueue.add(target);
+        }
     }
 
     public void update() {
@@ -55,7 +97,12 @@ public class CivilBuilder implements Serializable {
 
             case BUILDING:
                 if (assignedBuilding == null || assignedBuilding.isBuilt || assignedBuilding.isDemolishing) {
-                    startReturningHome();
+                    // --- FITUR BARU: Cek antrean dulu sebelum pulang ---
+                    if (!buildQueue.isEmpty()) {
+                        assignToBuild(buildQueue.remove(0), buildingsRef);
+                    } else {
+                        startReturningHome();
+                    }
                     return;
                 }
                 assignedBuilding.buildProgress += 1.0f;
@@ -63,12 +110,26 @@ public class CivilBuilder implements Serializable {
                     assignedBuilding.isBuilt = true;
                     assignedBuilding.assignedBuilder = null;
                     assignedBuilding = null;
-                    startReturningHome();
+                    // --- FITUR BARU: Kalau masih ada bangunan lain di antrean,
+                    // langsung berangkat ke sana tanpa mampir pulang dulu ---
+                    if (!buildQueue.isEmpty()) {
+                        assignToBuild(buildQueue.remove(0), buildingsRef);
+                    } else {
+                        startReturningHome();
+                    }
                 }
                 break;
 
             case RETURNING_HOME:
-                moveAlongPath(() -> state = BuilderState.IDLE_HOME);
+                moveAlongPath(() -> {
+                    // --- FITUR BARU: Kalau selama perjalanan pulang ternyata ada
+                    // bangunan baru masuk antrean, langsung balik lagi berangkat kerja ---
+                    if (!buildQueue.isEmpty()) {
+                        assignToBuild(buildQueue.remove(0), buildingsRef);
+                    } else {
+                        state = BuilderState.IDLE_HOME;
+                    }
+                });
                 break;
 
             case IDLE_HOME:
@@ -79,7 +140,10 @@ public class CivilBuilder implements Serializable {
     }
 
     private void startReturningHome() {
-        setPath(PathFinder.findPath(x, y, homeX, homeY, buildingsRef));
+        // --- FIX: Sama seperti assignToBuild, jangan anggap bangunan yang lagi ditempati
+        // builder ini (misal baru selesai bangun FARM & masih berdiri di atasnya) sebagai tembok ---
+        List<Building> obstacles = buildSafeObstacleList(buildingsRef, null);
+        setPath(PathFinder.findPath(x, y, homeX, homeY, obstacles));
         state = BuilderState.RETURNING_HOME;
     }
 

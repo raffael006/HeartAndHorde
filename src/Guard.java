@@ -28,6 +28,10 @@ public class Guard implements Serializable {
     public int size = 24;
     public boolean isSelected = false;
 
+    // --- FITUR BARU: ARAH HADAP (Kiri/Kanan) ---
+    // Default true = menghadap kanan (sesuai gambar asli Hearthguardbow.png & hearthguard_spier.png)
+    public boolean facingRight = true;
+
     public double maxHp;
     public double currentHp;
     public double attackDamage;
@@ -73,6 +77,10 @@ public class Guard implements Serializable {
 
                 // FIX: Toleransi diubah jadi 12.0 agar tidak terjadi traffic jam saat gerombolan lewat gang sempit!
                 if (distance > 12.0) {
+                    // --- FITUR BARU: Update arah hadap sesuai arah jalan ---
+                    if (dx > 0.1) facingRight = true;
+                    else if (dx < -0.1) facingRight = false;
+
                     x += (dx / distance) * speed;
                     y += (dy / distance) * speed;
                 } else {
@@ -85,6 +93,10 @@ public class Guard implements Serializable {
                 double distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance > speed) {
+                    // --- FITUR BARU: Update arah hadap sesuai arah jalan (formasi akhir) ---
+                    if (dx > 0.1) facingRight = true;
+                    else if (dx < -0.1) facingRight = false;
+
                     x += (dx / distance) * speed;
                     y += (dy / distance) * speed;
                 } else {
@@ -118,6 +130,10 @@ public class Guard implements Serializable {
             if (targetEnemy != null) {
                 if (minDistance <= attackRangePanah) {
                     if (state == GuardState.MOVING) return;
+                    // --- FITUR BARU: Saat menembak, tetap hadap ke arah musuh ---
+                    if (targetEnemy.x > this.x + 0.1) facingRight = true;
+                    else if (targetEnemy.x < this.x - 0.1) facingRight = false;
+
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         allProjectiles.add(new Projectile(x, y, targetEnemy.x, targetEnemy.y, true, attackDamage));
                         lastAttackTime = currentTime;
@@ -125,6 +141,10 @@ public class Guard implements Serializable {
                 } else if (state != GuardState.MOVING) {
                     double dx = targetEnemy.x - this.x;
                     double dy = targetEnemy.y - this.y;
+                    // --- FITUR BARU: Update arah hadap sesuai arah kejar musuh ---
+                    if (dx > 0.1) facingRight = true;
+                    else if (dx < -0.1) facingRight = false;
+
                     this.x += (dx / minDistance) * speed;
                     this.y += (dy / minDistance) * speed;
                 }
@@ -147,6 +167,10 @@ public class Guard implements Serializable {
 
             if (targetEnemyMelee != null) {
                 if (minDistanceMelee <= attackRangeMelee) {
+                    // --- FITUR BARU: Saat memukul, tetap hadap ke arah musuh ---
+                    if (targetEnemyMelee.x > this.x + 0.1) facingRight = true;
+                    else if (targetEnemyMelee.x < this.x - 0.1) facingRight = false;
+
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         targetEnemyMelee.currentHp -= this.attackDamage;
                         lastAttackTime = currentTime;
@@ -154,6 +178,10 @@ public class Guard implements Serializable {
                 } else if (state != GuardState.MOVING) {
                     double dx = targetEnemyMelee.x - this.x;
                     double dy = targetEnemyMelee.y - this.y;
+                    // --- FITUR BARU: Update arah hadap sesuai arah kejar musuh ---
+                    if (dx > 0.1) facingRight = true;
+                    else if (dx < -0.1) facingRight = false;
+
                     this.x += (dx / minDistanceMelee) * speed;
                     this.y += (dy / minDistanceMelee) * speed;
                 }
@@ -188,7 +216,16 @@ public class Guard implements Serializable {
         }
 
         if (fullSheet != null) {
-            g2d.drawImage(fullSheet, (int)x, (int)y, size, size, null);
+            // --- FITUR BARU: Flip gambar horizontal kalau lagi menghadap kiri ---
+            if (!facingRight) {
+                java.awt.geom.AffineTransform oldTransform = g2d.getTransform();
+                g2d.translate((int) x + size, (int) y);
+                g2d.scale(-1, 1);
+                g2d.drawImage(fullSheet, 0, 0, size, size, null);
+                g2d.setTransform(oldTransform);
+            } else {
+                g2d.drawImage(fullSheet, (int)x, (int)y, size, size, null);
+            }
         } else {
             g2d.setColor(type == GuardType.ARCHER ? new Color(50, 150, 50) : new Color(50, 50, 150));
             g2d.fillRect((int)x, (int)y, size, size);

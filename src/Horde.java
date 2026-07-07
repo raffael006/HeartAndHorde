@@ -19,6 +19,10 @@ public class Horde implements Serializable {
     public double x, y;
     public int size = 24; // Samakan dengan Guard agar proporsinya imbang
 
+    // --- FITUR BARU: ARAH HADAP (Kiri/Kanan) ---
+    // Default false = menghadap kiri (sesuai gambar asli 1Horde.png, 2Horde.png, 3Horde.png)
+    public boolean facingRight = false;
+
     // Atribut Status Pertarungan (Samsak)
     public double maxHp;
     public double currentHp;
@@ -81,6 +85,10 @@ public class Horde implements Serializable {
 
                 if (minDistance <= attackRangePanahMusuh) {
                     // Masuk jarak tembak: Berhenti dan Tembak (Cek cooldown)
+                    // --- FITUR BARU: Saat menembak, tetap hadap ke arah target ---
+                    if (targetGuard.x > this.x + 0.1) facingRight = true;
+                    else if (targetGuard.x < this.x - 0.1) facingRight = false;
+
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         // BUAT PROYEKTIL BARU (false = dari horde, damage 15)
                         allProjectiles.add(new Projectile(x, y, targetGuard.x, targetGuard.y, false, attackDamage));
@@ -90,6 +98,10 @@ public class Horde implements Serializable {
                     // Di luar jarak tembak: Maju!
                     double dx = targetGuard.x - this.x;
                     double dy = targetGuard.y - this.y;
+                    // --- FITUR BARU: Update arah hadap sesuai arah maju ---
+                    if (dx > 0.1) facingRight = true;
+                    else if (dx < -0.1) facingRight = false;
+
                     this.x += (dx / minDistance) * speed;
                     this.y += (dy / minDistance) * speed;
                 }
@@ -98,6 +110,10 @@ public class Horde implements Serializable {
                 // --- LOGIKA MELEE (AXEMAN & SHIELD - Tetap aslinya) ---
                 double attackRangeMeleeMusuh = size + 5;
                 if (minDistance <= attackRangeMeleeMusuh) {
+                    // --- FITUR BARU: Saat memukul, tetap hadap ke arah target ---
+                    if (targetGuard.x > this.x + 0.1) facingRight = true;
+                    else if (targetGuard.x < this.x - 0.1) facingRight = false;
+
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         targetGuard.currentHp -= this.attackDamage;
                         lastAttackTime = currentTime;
@@ -105,6 +121,10 @@ public class Horde implements Serializable {
                 } else {
                     double dx = targetGuard.x - this.x;
                     double dy = targetGuard.y - this.y;
+                    // --- FITUR BARU: Update arah hadap sesuai arah maju ---
+                    if (dx > 0.1) facingRight = true;
+                    else if (dx < -0.1) facingRight = false;
+
                     this.x += (dx / minDistance) * speed;
                     this.y += (dy / minDistance) * speed;
                 }
@@ -153,8 +173,18 @@ public class Horde implements Serializable {
 
         // --- LAYER 2: GAMBAR HORDE ---
         if (img != null) {
-            // Gambar langsung mengikuti ukuran hitbox (size x size) agar proporsinya sama dengan Guard
-            g2d.drawImage(img, (int)x, (int)y, size, size, null);
+            // --- FITUR BARU: Flip gambar horizontal kalau lagi menghadap kanan ---
+            // (Sprite asli Horde defaultnya menghadap KIRI, kebalikan dari Guard)
+            if (facingRight) {
+                java.awt.geom.AffineTransform oldTransform = g2d.getTransform();
+                g2d.translate((int) x + size, (int) y);
+                g2d.scale(-1, 1);
+                g2d.drawImage(img, 0, 0, size, size, null);
+                g2d.setTransform(oldTransform);
+            } else {
+                // Gambar langsung mengikuti ukuran hitbox (size x size) agar proporsinya sama dengan Guard
+                g2d.drawImage(img, (int)x, (int)y, size, size, null);
+            }
         } else {
             g2d.setColor(Color.RED);
             g2d.fillRect((int)x, (int)y, size, size);

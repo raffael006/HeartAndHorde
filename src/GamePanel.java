@@ -57,6 +57,9 @@ public class GamePanel extends JPanel {
 
     // --- TAMBAHAN BARU: Status Cheat Mode ---
     private boolean isCheatModeActive = false;
+    // --- FITUR BARU: DEVELOPER PANEL ---
+    private boolean devPanelVisible = false;
+    private JPanel devPanel;
 
     // --- Variabel UI/HUD ---
     private JPanel bottomLeftBar;
@@ -67,11 +70,18 @@ public class GamePanel extends JPanel {
     private JButton house1Btn, house2Btn, house3Btn;
 
     // --- VARIABEL GRID MENU & ALAT ---
-    private enum MenuState { CLOSED, MAIN_MENU, CIVIL_MENU, MILITARY_MENU, BUILDING_SELECTED, MINE_SELECTED }    private MenuState currentMenuState = MenuState.MAIN_MENU;
+    private enum MenuState { CLOSED, MAIN_MENU, CIVIL_MENU, MILITARY_MENU, BUILDING_SELECTED, MINE_SELECTED, BARRACK_MENU }    private MenuState currentMenuState = MenuState.MAIN_MENU;
     private Building.BuildingType selectedBuilding = Building.BuildingType.MEDIUM_HOUSE;
     private JPanel gridMenuPanel;
     private Building clickedBuilding = null;
     private BufferedImage civilBuilderImg;
+
+    // --- FITUR BARU: SISTEM PRODUKSI GUARD DARI BARRACK ---
+    // Setiap barrack punya antrian Guard-nya sendiri (HashMap supaya bisa beda-beda tiap bangunan)
+    private java.util.HashMap<Building, java.util.Queue<Guard.GuardType>> barrackQueues = new java.util.HashMap<>();
+    private java.util.HashMap<Building, Float> barrackProgress = new java.util.HashMap<>();
+    private final float GUARD_PRODUCTION_MAX = 300f; // 300 tick ~= 5 detik @ 60fps
+    private JPanel barrackQueuePanel; // Panel antrean di sebelah kanan grid menu
 
     // Kita ubah jadi Width agar dia meluncur/mengembang ke kanan
     private double currentSubWidth = 0.0;
@@ -211,6 +221,27 @@ public class GamePanel extends JPanel {
                 cb.update();
             }
 
+            // --- FITUR BARU: LOGIKA PRODUKSI GUARD DARI BARRACK ---
+            for (Building b : window.savedBuildings) {
+                if (b.type == Building.BuildingType.BARRACK && b.isBuilt) {
+                    java.util.Queue<Guard.GuardType> q = barrackQueues.get(b);
+                    if (q != null && !q.isEmpty()) {
+                        float prog = barrackProgress.getOrDefault(b, 0f) + 1f;
+                        if (prog >= GUARD_PRODUCTION_MAX) {
+                            Guard.GuardType type = q.poll();
+                            double spawnX = b.getBounds().getCenterX();
+                            double spawnY = b.getBounds().getMaxY() + 15;
+                            window.activeGuards.add(new Guard(type, spawnX, spawnY));
+                            barrackProgress.put(b, 0f);
+                        } else {
+                            barrackProgress.put(b, prog);
+                        }
+                    }
+                }
+            }
+            // Refresh panel antrean kalau lagi terbuka
+            if (barrackQueuePanel != null && barrackQueuePanel.isVisible()) barrackQueuePanel.repaint();
+
             // 1. Update Guards (Parameter Nambah)
             for (Guard g : window.activeGuards) {
                 g.update(window.activeGuards, window.activeHordes, window.activeProjectiles);
@@ -326,11 +357,26 @@ public class GamePanel extends JPanel {
 
             for (Building b : window.savedBuildings) {
                 if (!b.isBuilt && b.assignedBuilder == null) {
+                    // --- FITUR BARU: SISTEM ANTREAN CIVIL BUILDER ---
+                    // 1) Prioritaskan builder yang lagi nganggur di rumah (langsung berangkat sekarang).
+                    CivilBuilder chosenBuilder = null;
                     for (CivilBuilder cb : window.activeCivilBuilders) {
                         if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
-                            cb.assignToBuild(b, window.savedBuildings);
+                            chosenBuilder = cb;
                             break;
                         }
+                    }
+                    // 2) Kalau semua builder lagi sibuk, taruh ke builder dengan antrean paling sedikit
+                    // (biar beban kerja merata kalau builder-nya lebih dari satu).
+                    if (chosenBuilder == null) {
+                        for (CivilBuilder cb : window.activeCivilBuilders) {
+                            if (chosenBuilder == null || cb.buildQueue.size() < chosenBuilder.buildQueue.size()) {
+                                chosenBuilder = cb;
+                            }
+                        }
+                    }
+                    if (chosenBuilder != null) {
+                        chosenBuilder.queueBuilding(b, window.savedBuildings);
                     }
                 }
             }
@@ -394,6 +440,8 @@ public class GamePanel extends JPanel {
                     menuBtn.setBounds(topRightBar.getWidth() - 40, 4, 32, 32);
                     bottomLeftBar.setBounds(15, h - 310, 180, 80);
                     if (gridMenuPanel != null) gridMenuPanel.setBounds(230, h - 200, 240, 180);
+                    if (barrackQueuePanel != null) barrackQueuePanel.setBounds(475, h - 200, 180, 180);
+                    if (devPanel != null) devPanel.setBounds(w / 2 - 270, h / 2 - 230, 540, 460);
                 }
             }
         });
@@ -676,9 +724,10 @@ public class GamePanel extends JPanel {
                     } else {
                         // --- TAMBAHAN KODE: CEK DAN KURANGI COST KAYU ---
                         int cost = Building.getWoodCost(selectedBuilding);
-                        if (totalWood >= cost) {
+                        // --- DEV MODE: gratis, skip cek kayu ---
+                        if (isCheatModeActive || totalWood >= cost) {
                             if (!isOverlapping(newArea, null) && !isTreeBlocking(newArea)) {
-                                totalWood -= cost; // Bayar kayunya
+                                if (!isCheatModeActive) totalWood -= cost; // Bayar kayunya (hanya kalau bukan dev mode)
 
                                 int cap = getBuildCapacity(selectedBuilding);
                                 Building newBuilding = new Building(targetX, targetY, bw, bw, selectedBuilding, cap);
@@ -775,8 +824,8 @@ public class GamePanel extends JPanel {
                         for (int x = startX; x <= endX; x += 10) {
                             Building.BuildingType type = (x == startX) ? Building.BuildingType.WALL_L : Building.BuildingType.WALL_R;
                             int cost = Building.getWoodCost(type);
-                            if (totalWood >= cost && !isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
-                                totalWood -= cost;
+                            if ((isCheatModeActive || totalWood >= cost) && !isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
+                                if (!isCheatModeActive) totalWood -= cost;
                                 window.savedBuildings.add(new Building(x, y, 10, 10, type, 0));
                             }
                         }
@@ -787,8 +836,8 @@ public class GamePanel extends JPanel {
                         int x = dragStartPoint.x;
                         for (int y = startY; y <= endY; y += 10) {
                             int cost = Building.getWoodCost(Building.BuildingType.WALL_UD);
-                            if (totalWood >= cost && !isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
-                                totalWood -= cost;
+                            if ((isCheatModeActive || totalWood >= cost) && !isOverlapping(new Rectangle(x, y, 10, 10), null) && !isTreeBlocking(new Rectangle(x, y, 10, 10))) {
+                                if (!isCheatModeActive) totalWood -= cost;
                                 window.savedBuildings.add(new Building(x, y, 10, 10, Building.BuildingType.WALL_UD, 0));
                             }
                         }
@@ -831,6 +880,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.WALL_L || type == Building.BuildingType.WALL_R || type == Building.BuildingType.WALL_UD) return 0; // Tembok tidak menampung Civil
         if (type == Building.BuildingType.FARM) return 0;    // Farm tempat kerja, bukan tempat tinggal -> tidak spawn Civil
         if (type == Building.BuildingType.STORAGE) return 0; // Storage cuma gudang -> tidak spawn Civil
+        if (type == Building.BuildingType.BARRACK) return 0; // Barrack tidak spawn Civil -> Guard diproduksi manual via menu ➕
         if (type == Building.BuildingType.SMALL_HOUSE) return 2;
         if (type == Building.BuildingType.BIG_HOUSE) return 8;
         if (type == Building.BuildingType.BUILDER) return 2;
@@ -945,9 +995,64 @@ public class GamePanel extends JPanel {
             }, false));
 
             // Isi 8 kotak kosong dan 1 tombol kembali
-            for(int i=0; i<8; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            // --- FITUR BARU: Tombol "+" khusus muncul kalau bangunan yang diklik adalah BARRACK ---
+            if (clickedBuilding != null && clickedBuilding.type == Building.BuildingType.BARRACK && clickedBuilding.isBuilt) {
+                gridMenuPanel.add(createGridBtn("➕", () -> {
+                    currentMenuState = MenuState.BARRACK_MENU;
+                    updateGridMenu();
+                    if (barrackQueuePanel != null) {
+                        barrackQueuePanel.setVisible(true);
+                        barrackQueuePanel.repaint();
+                    }
+                }, false));
+            } else {
+                gridMenuPanel.add(createGridBtn("", null, false));
+            }
+            for(int i=0; i<7; i++) gridMenuPanel.add(createGridBtn("", null, false));
             gridMenuPanel.add(createGridBtn("⬅️", () -> {
                 clickedBuilding = null; currentMenuState = MenuState.MAIN_MENU; updateGridMenu(); repaint();
+                if (barrackQueuePanel != null) barrackQueuePanel.setVisible(false);
+            }, false));
+        }
+
+        // --- FITUR BARU: MENU PILIH GUARD DI BARRACK ---
+        else if (currentMenuState == MenuState.BARRACK_MENU) {
+            // Slot 1: Spearman (pakai gambar sprite)
+            gridMenuPanel.add(createGridBtnWithImage(spearmanImg, "Spearman", () -> {
+                if (clickedBuilding != null) {
+                    // --- FITUR BARU: Butuh 1 Civil untuk direkrut jadi Guard ---
+                    if (!window.activeCivils.isEmpty()) {
+                        window.activeCivils.remove(window.activeCivils.size() - 1); // Kurangi 1 civil
+                        barrackQueues.computeIfAbsent(clickedBuilding, k -> new java.util.LinkedList<>())
+                                .add(Guard.GuardType.SPEARMAN);
+                        if (barrackQueuePanel != null) barrackQueuePanel.repaint();
+                    } else {
+                        System.out.println("Tidak ada Civil yang bisa direkrut menjadi Spearman!");
+                    }
+                }
+            }));
+            // Slot 2: Archer (pakai gambar sprite)
+            gridMenuPanel.add(createGridBtnWithImage(archerImg, "Archer", () -> {
+                if (clickedBuilding != null) {
+                    // --- FITUR BARU: Butuh 1 Civil untuk direkrut jadi Guard ---
+                    if (!window.activeCivils.isEmpty()) {
+                        window.activeCivils.remove(window.activeCivils.size() - 1); // Kurangi 1 civil
+                        barrackQueues.computeIfAbsent(clickedBuilding, k -> new java.util.LinkedList<>())
+                                .add(Guard.GuardType.ARCHER);
+                        if (barrackQueuePanel != null) barrackQueuePanel.repaint();
+                    } else {
+                        System.out.println("Tidak ada Civil yang bisa direkrut menjadi Archer!");
+                    }
+                }
+            }));
+            // Slot 3: Tampilan jumlah Civil yang tersedia (teks, merah kalau 0)
+            gridMenuPanel.add(createCivilCountDisplay());
+            // Sisa kotak kosong + tombol kembali
+            for(int i=0; i<8; i++) gridMenuPanel.add(createGridBtn("", null, false));
+            gridMenuPanel.add(createGridBtn("⬅️", () -> {
+                currentMenuState = MenuState.BUILDING_SELECTED;
+                updateGridMenu();
+                if (barrackQueuePanel != null) barrackQueuePanel.setVisible(false);
             }, false));
         }
 
@@ -1015,6 +1120,88 @@ public class GamePanel extends JPanel {
         btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
         if (action != null) btn.addActionListener(e -> action.run());
         return btn;
+    }
+
+    // --- FITUR BARU: Varian createGridBtn yang menampilkan gambar sprite (untuk menu Barrack) ---
+    private JButton createGridBtnWithImage(BufferedImage img, String label, Runnable action) {
+        JButton btn = new JButton() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // Background + hover
+                g2d.setColor(getModel().isRollover() ? new Color(15, 12, 10) : new Color(40, 35, 30));
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(new Color(80, 60, 35));
+                g2d.drawRect(0, 0, getWidth(), getHeight());
+
+                int w = getWidth(), h = getHeight();
+
+                // Gambar sprite di tengah atas
+                if (img != null) {
+                    int imgSize = Math.min(w - 10, h - 20);
+                    int imgX = (w - imgSize) / 2;
+                    int imgY = 4;
+                    g2d.drawImage(img, imgX, imgY, imgSize, imgSize, null);
+                }
+
+                // Label nama di bawah gambar
+                g2d.setColor(new Color(210, 190, 160));
+                g2d.setFont(new Font("Serif", Font.BOLD, 10));
+                FontMetrics fm = g2d.getFontMetrics();
+                g2d.drawString(label, (w - fm.stringWidth(label)) / 2, h - 5);
+
+                g2d.dispose();
+            }
+        };
+        btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+        if (action != null) btn.addActionListener(e -> action.run());
+        return btn;
+    }
+
+    // --- FITUR BARU: Slot info jumlah Civil tersedia di menu Barrack ---
+    // Teks putih kalau cukup, merah kalau 0 (tidak bisa rekrut)
+    private JPanel createCivilCountDisplay() {
+        return new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // Background sama seperti slot grid lain
+                g2d.setColor(new Color(40, 35, 30));
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(new Color(80, 60, 35));
+                g2d.drawRect(0, 0, getWidth(), getHeight());
+
+                int civilCount = window.activeCivils.size();
+                int w = getWidth(), h = getHeight();
+
+                // Label atas: "Civil"
+                g2d.setFont(new Font("Serif", Font.BOLD, 11));
+                g2d.setColor(new Color(180, 160, 120));
+                String label = "Civil";
+                FontMetrics fm = g2d.getFontMetrics();
+                g2d.drawString(label, (w - fm.stringWidth(label)) / 2, h / 2 - 8);
+
+                // Angka: putih kalau ada, merah kalau 0
+                g2d.setFont(new Font("Serif", Font.BOLD, 20));
+                g2d.setColor(civilCount > 0 ? new Color(220, 210, 180) : new Color(220, 50, 50));
+                String countStr = String.valueOf(civilCount);
+                FontMetrics fm2 = g2d.getFontMetrics();
+                g2d.drawString(countStr, (w - fm2.stringWidth(countStr)) / 2, h / 2 + 14);
+
+                // Label bawah: "tersedia" atau "kurang!" kalau 0
+                g2d.setFont(new Font("Serif", Font.ITALIC, 9));
+                g2d.setColor(civilCount > 0 ? new Color(150, 135, 105) : new Color(200, 60, 60));
+                String sub = civilCount > 0 ? "tersedia" : "kurang!";
+                FontMetrics fm3 = g2d.getFontMetrics();
+                g2d.drawString(sub, (w - fm3.stringWidth(sub)) / 2, h / 2 + 26);
+
+                g2d.dispose();
+            }
+        };
     }
 
     private void setupHUD() {
@@ -1195,8 +1382,106 @@ public class GamePanel extends JPanel {
         };
         gridMenuPanel.setBounds(230, getHeight() - 200, 240, 180); gridMenuPanel.setVisible(false);
 
-        add(topRightBar); add(gridMenuPanel); add(bottomLeftBar);
-        setComponentZOrder(topRightBar, 0); setComponentZOrder(gridMenuPanel, 1); setComponentZOrder(bottomLeftBar, 2);
+        // --- FITUR BARU: PANEL ANTREAN PRODUKSI BARRACK (tanpa grid, di sebelah kanan gridMenuPanel) ---
+        barrackQueuePanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int w = getWidth(), h = getHeight();
+
+                // Background gelap sama seperti gridMenuPanel
+                g2d.setColor(new Color(25, 20, 18, 240));
+                g2d.fillRect(0, 0, w, h);
+                g2d.setColor(new Color(100, 75, 45));
+                g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRect(1, 1, w - 3, h - 3);
+
+                // Judul
+                g2d.setFont(new Font("Segoe UI Emoji", Font.BOLD, 11));
+                g2d.setColor(new Color(210, 190, 150));
+                g2d.drawString("PRODUCTION QUEUE", 10, 18);
+
+                // Ambil data antrian dari barrack yang sedang dipilih
+                java.util.Queue<Guard.GuardType> q = (clickedBuilding != null) ? barrackQueues.get(clickedBuilding) : null;
+                float prog = (clickedBuilding != null) ? barrackProgress.getOrDefault(clickedBuilding, 0f) : 0f;
+                Guard.GuardType[] arr = (q != null) ? q.toArray(new Guard.GuardType[0]) : new Guard.GuardType[0];
+
+                if (arr.length == 0) {
+                    // Antrean kosong
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 11));
+                    g2d.setColor(new Color(130, 115, 90));
+                    g2d.drawString("(queue kosong)", 18, h / 2 + 4);
+                } else {
+                    // --- Bar Produksi: Guard yang sedang dibuat (arr[0]) ---
+                    int barY = 30;
+                    int barW = w - 20;
+
+                    // Gambar sprite guard yang sedang diproduksi
+                    BufferedImage producingImg = (arr[0] == Guard.GuardType.SPEARMAN) ? spearmanImg : archerImg;
+                    if (producingImg != null) g2d.drawImage(producingImg, 8, barY, 28, 28, null);
+
+                    // Label nama
+                    g2d.setFont(new Font("Segoe UI Emoji", Font.BOLD, 11));
+                    g2d.setColor(new Color(210, 190, 150));
+                    g2d.drawString(arr[0] == Guard.GuardType.SPEARMAN ? "Spearman" : "Archer", 42, barY + 12);
+
+                    // Loading bar produksi
+                    int pbY = barY + 18;
+                    int pbW = barW - 34;
+                    int pbH = 8;
+                    int pbX = 42;
+                    g2d.setColor(new Color(60, 50, 35));
+                    g2d.fillRoundRect(pbX, pbY, pbW, pbH, 4, 4);
+                    g2d.setColor(new Color(180, 140, 50));
+                    int fill = (int) ((prog / GUARD_PRODUCTION_MAX) * pbW);
+                    g2d.fillRoundRect(pbX, pbY, fill, pbH, 4, 4);
+                    g2d.setColor(new Color(100, 75, 45));
+                    g2d.drawRoundRect(pbX, pbY, pbW, pbH, 4, 4);
+
+                    // --- Sisa antrian (arr[1] dst.) sebagai ikon kecil ---
+                    if (arr.length > 1) {
+                        g2d.setColor(new Color(150, 130, 100));
+                        g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                        g2d.drawString("Waiting:", 8, 72);
+
+                        int iconX = 8;
+                        int iconY = 78;
+                        int iconSize = 24;
+                        for (int i = 1; i < arr.length && i <= 6; i++) {
+                            BufferedImage qIcon = (arr[i] == Guard.GuardType.SPEARMAN) ? spearmanImg : archerImg;
+                            if (qIcon != null) {
+                                g2d.drawImage(qIcon, iconX, iconY, iconSize, iconSize, null);
+                                // Garis kotak kecil di sekeliling ikon
+                                g2d.setColor(new Color(100, 75, 45));
+                                g2d.drawRect(iconX, iconY, iconSize, iconSize);
+                            }
+                            iconX += iconSize + 3;
+                            if (iconX + iconSize > w - 5) { iconX = 8; iconY += iconSize + 3; }
+                        }
+                        // Kalau masih ada lebih dari yang ditampilkan
+                        if (arr.length > 7) {
+                            g2d.setFont(new Font("Serif", Font.BOLD, 10));
+                            g2d.setColor(new Color(200, 180, 140));
+                            g2d.drawString("+" + (arr.length - 7) + " more", iconX, iconY + 16);
+                        }
+                    }
+                }
+                g2d.dispose();
+            }
+        };
+        barrackQueuePanel.setBounds(475, getHeight() - 200, 180, 180);
+        barrackQueuePanel.setVisible(false);
+        barrackQueuePanel.setOpaque(false);
+
+        add(topRightBar); add(gridMenuPanel); add(barrackQueuePanel); add(bottomLeftBar);
+        setComponentZOrder(topRightBar, 0); setComponentZOrder(gridMenuPanel, 1); setComponentZOrder(barrackQueuePanel, 2); setComponentZOrder(bottomLeftBar, 3);
+
+        // --- FITUR BARU: INISIALISASI DEV PANEL ---
+        devPanel = buildDevPanel();
+        add(devPanel);
+        setComponentZOrder(devPanel, 0); // Di atas semua panel lain
     }
 
     private JButton createColorButton(Color baseColor, ToolMode mode, String icon) {
@@ -1262,42 +1547,422 @@ public class GamePanel extends JPanel {
         return btn;
     }
 
+    // =====================================================================
+    // --- DEVELOPER PANEL (custom designed, all features accessible) ---
+    // =====================================================================
+    private JPanel buildDevPanel() {
+        JPanel panel = new JPanel(null) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+
+                // --- Background gelap dengan gradient ---
+                GradientPaint bg = new GradientPaint(0, 0, new Color(18, 14, 12), 0, h, new Color(28, 22, 18));
+                g2d.setPaint(bg);
+                g2d.fillRoundRect(0, 0, w, h, 16, 16);
+
+                // --- Border emas ---
+                g2d.setColor(new Color(120, 90, 40));
+                g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRoundRect(1, 1, w - 3, h - 3, 16, 16);
+
+                // --- Garis dekorasi bawah title ---
+                g2d.setColor(new Color(100, 75, 30));
+                g2d.setStroke(new BasicStroke(1f));
+                g2d.drawLine(16, 44, w - 16, 44);
+
+                // --- Title ---
+                g2d.setFont(new Font("Georgia", Font.BOLD, 16));
+                g2d.setColor(new Color(218, 165, 32));
+                g2d.drawString("⚙  DEVELOPER MODE", 18, 30);
+
+                // --- Section headers ---
+                g2d.setFont(new Font("Georgia", Font.BOLD, 11));
+                g2d.setColor(new Color(180, 140, 70));
+                g2d.drawString("RESOURCES", 18, 68);
+                g2d.drawString("GUARDS", 18, 168);
+                g2d.drawString("HORDES", 18, 268);
+                g2d.drawString("WORLD", 18, 368);
+
+                // Garis tipis tiap section
+                g2d.setColor(new Color(60, 48, 30));
+                g2d.drawLine(90, 62, w - 16, 62);
+                g2d.drawLine(72, 162, w - 16, 162);
+                g2d.drawLine(70, 262, w - 16, 262);
+                g2d.drawLine(62, 362, w - 16, 362);
+
+                // --- Live stats ---
+                g2d.setFont(new Font("Serif", Font.PLAIN, 11));
+                g2d.setColor(new Color(160, 145, 115));
+                g2d.drawString("Wood: " + totalWood
+                        + "   Civil: " + window.activeCivils.size()
+                        + "   Guard: " + window.activeGuards.size()
+                        + "   Horde: " + window.activeHordes.size(), 18, h - 14);
+
+                g2d.dispose();
+            }
+        };
+        panel.setOpaque(false);
+
+        // Helper: buat tombol dev bergaya game
+        java.util.function.BiFunction<String, Runnable, JButton> mkBtn = (label, action) -> {
+            JButton b = new JButton(label) {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    boolean hover = getModel().isRollover();
+                    boolean press = getModel().isPressed();
+                    g2.setColor(press ? new Color(90, 65, 20) : hover ? new Color(55, 44, 28) : new Color(30, 24, 18));
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                    g2.setColor(hover ? new Color(200, 155, 50) : new Color(100, 75, 35));
+                    g2.setStroke(new BasicStroke(1.2f));
+                    g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
+                    g2.setFont(new Font("Serif", Font.BOLD, 11));
+                    g2.setColor(hover ? new Color(230, 195, 100) : new Color(185, 160, 100));
+                    FontMetrics fm = g2.getFontMetrics();
+                    g2.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2 - 1);
+                    g2.dispose();
+                }
+            };
+            b.setContentAreaFilled(false); b.setBorderPainted(false); b.setFocusPainted(false);
+            b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            b.addActionListener(e -> { action.run(); panel.repaint(); });
+            return b;
+        };
+
+        // Helper: posisi spawn (tengah layar visible)
+        java.util.function.Supplier<double[]> spawnPos = () -> {
+            double wx = (getWidth() / 2.0 - camera.getX()) / camera.getZoom();
+            double wy = (getHeight() / 2.0 - camera.getY()) / camera.getZoom();
+            return new double[]{wx, wy};
+        };
+
+        int bw = 114, bh = 30, col1 = 18, col2 = 140, col3 = 262, col4 = 390;
+
+        // ===== SECTION: RESOURCES =====
+        JButton addWood100  = mkBtn.apply("+100 Wood",  () -> totalWood += 100);
+        JButton addWood500  = mkBtn.apply("+500 Wood",  () -> totalWood += 500);
+        JButton addWood2000 = mkBtn.apply("+2000 Wood", () -> totalWood += 2000);
+        JButton setWood0    = mkBtn.apply("Reset Wood", () -> totalWood = 0);
+        addWood100 .setBounds(col1, 76, bw, bh);
+        addWood500 .setBounds(col2, 76, bw, bh);
+        addWood2000.setBounds(col3, 76, bw, bh);
+        setWood0   .setBounds(col4, 76, bw, bh);
+
+        JButton spawnCivil1  = mkBtn.apply("+1 Civil",  () -> { double[] p = spawnPos.get(); window.activeCivils.add(new Civil(p[0], p[1])); });
+        JButton spawnCivil5  = mkBtn.apply("+5 Civil",  () -> { double[] p = spawnPos.get(); for (int i = 0; i < 5; i++) window.activeCivils.add(new Civil(p[0] + i * 25, p[1])); });
+        JButton spawnCivil20 = mkBtn.apply("+20 Civil", () -> { double[] p = spawnPos.get(); for (int i = 0; i < 20; i++) window.activeCivils.add(new Civil(p[0] + (i % 5) * 28, p[1] + (i / 5) * 28)); });
+        JButton killAllCivil = mkBtn.apply("Kill Civils", () -> window.activeCivils.clear());
+        spawnCivil1 .setBounds(col1, 113, bw, bh);
+        spawnCivil5 .setBounds(col2, 113, bw, bh);
+        spawnCivil20.setBounds(col3, 113, bw, bh);
+        killAllCivil.setBounds(col4, 113, bw, bh);
+
+        // ===== SECTION: GUARDS =====
+        JButton spawnSpear1 = mkBtn.apply("+1 Spearman", () -> { double[] p = spawnPos.get(); window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, p[0], p[1])); });
+        JButton spawnSpear5 = mkBtn.apply("+5 Spearman", () -> { double[] p = spawnPos.get(); for (int i = 0; i < 5; i++) window.activeGuards.add(new Guard(Guard.GuardType.SPEARMAN, p[0] + i * 28, p[1])); });
+        JButton spawnArch1  = mkBtn.apply("+1 Archer",   () -> { double[] p = spawnPos.get(); window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, p[0], p[1])); });
+        JButton spawnArch5  = mkBtn.apply("+5 Archer",   () -> { double[] p = spawnPos.get(); for (int i = 0; i < 5; i++) window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, p[0] + i * 28, p[1])); });
+        spawnSpear1.setBounds(col1, 176, bw, bh);
+        spawnSpear5.setBounds(col2, 176, bw, bh);
+        spawnArch1 .setBounds(col3, 176, bw, bh);
+        spawnArch5 .setBounds(col4, 176, bw, bh);
+
+        JButton killAllGuard = mkBtn.apply("Kill All Guards", () -> window.activeGuards.clear());
+        JButton heal100Guard  = mkBtn.apply("Full HP Guards",  () -> window.activeGuards.forEach(g -> g.currentHp = g.maxHp));
+        killAllGuard.setBounds(col1, 213, bw, bh);
+        heal100Guard.setBounds(col2, 213, bw, bh);
+
+        // ===== SECTION: HORDES =====
+        JButton spawnAxe1    = mkBtn.apply("+1 Axeman",     () -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.AXEMAN, p[0], p[1])); });
+        JButton spawnShield1 = mkBtn.apply("+1 Shieldbearer",() -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.SHIELDBEARER, p[0], p[1])); });
+        JButton spawnBow1    = mkBtn.apply("+1 Bowman",     () -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.BOWMAN, p[0], p[1])); });
+        JButton spawnAll3    = mkBtn.apply("+5 Mixed Horde",() -> { double[] p = spawnPos.get(); for (int i = 0; i < 5; i++) { int t = i % 3; window.activeHordes.add(new Horde(t == 0 ? Horde.HordeType.AXEMAN : t == 1 ? Horde.HordeType.SHIELDBEARER : Horde.HordeType.BOWMAN, p[0] + i * 30, p[1])); } });
+        spawnAxe1   .setBounds(col1, 276, bw, bh);
+        spawnShield1.setBounds(col2, 276, bw, bh);
+        spawnBow1   .setBounds(col3, 276, bw, bh);
+        spawnAll3   .setBounds(col4, 276, bw, bh);
+
+        JButton killAllHorde = mkBtn.apply("Kill All Hordes", () -> window.activeHordes.clear());
+        JButton spawnHorde20 = mkBtn.apply("+20 Axemen",     () -> { double[] p = spawnPos.get(); for (int i = 0; i < 20; i++) window.activeHordes.add(new Horde(Horde.HordeType.AXEMAN, p[0] + (i % 5) * 30, p[1] + (i / 5) * 30)); });
+        killAllHorde.setBounds(col1, 313, bw, bh);
+        spawnHorde20.setBounds(col2, 313, bw, bh);
+
+        // ===== SECTION: WORLD =====
+        JButton clearBuildings = mkBtn.apply("Clear Buildings", () -> { window.savedBuildings.clear(); });
+        JButton clearProj      = mkBtn.apply("Clear Projectiles", () -> window.activeProjectiles.clear());
+        JButton clearAll       = mkBtn.apply("Clear Everything", () -> { window.activeGuards.clear(); window.activeHordes.clear(); window.activeProjectiles.clear(); });
+        JButton centerCam      = mkBtn.apply("Center Camera", () -> { camera.centerOn(1500, 1500, getWidth(), getHeight()); repaint(); });
+        clearBuildings.setBounds(col1, 376, bw, bh);
+        clearProj     .setBounds(col2, 376, bw, bh);
+        clearAll      .setBounds(col3, 376, bw, bh);
+        centerCam     .setBounds(col4, 376, bw, bh);
+
+        // ===== CLOSE BUTTON =====
+        JButton closeBtn = new JButton("✕") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                boolean hover = getModel().isRollover();
+                g2.setColor(hover ? new Color(160, 40, 30) : new Color(80, 30, 24));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                g2.setColor(hover ? new Color(255, 100, 80) : new Color(180, 80, 60));
+                g2.setStroke(new BasicStroke(1f));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
+                g2.setFont(new Font("Serif", Font.BOLD, 13));
+                g2.setColor(new Color(240, 200, 190));
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString("✕", (getWidth() - fm.stringWidth("✕")) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2 - 1);
+                g2.dispose();
+            }
+        };
+        closeBtn.setContentAreaFilled(false); closeBtn.setBorderPainted(false); closeBtn.setFocusPainted(false);
+        closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeBtn.setBounds(540 - 38, 8, 28, 28);
+        closeBtn.addActionListener(e -> { devPanelVisible = false; panel.setVisible(false); });
+
+        // Add all buttons
+        for (JButton b : new JButton[]{
+                addWood100, addWood500, addWood2000, setWood0,
+                spawnCivil1, spawnCivil5, spawnCivil20, killAllCivil,
+                spawnSpear1, spawnSpear5, spawnArch1, spawnArch5,
+                killAllGuard, heal100Guard,
+                spawnAxe1, spawnShield1, spawnBow1, spawnAll3,
+                killAllHorde, spawnHorde20,
+                clearBuildings, clearProj, clearAll, centerCam,
+                closeBtn
+        }) panel.add(b);
+
+        panel.setVisible(false);
+        return panel;
+    }
+
     private void showInGameMenu() {
-        JPopupMenu popup = new JPopupMenu();
-        JMenuItem saveItem = new JMenuItem("Save Progress");
-        JMenuItem mainMenuItem = new JMenuItem("Back to Main Menu");
+        // ================================================================
+        // CUSTOM IN-GAME MENU — desain dark fantasy, bukan default Java UI
+        // ================================================================
+        JWindow menuWin = new JWindow(SwingUtilities.getWindowAncestor(this));
+        menuWin.setBackground(new Color(0, 0, 0, 0));
 
-        // --- TAMBAHAN BARU: MENU CHEAT MODE ---
-        JCheckBoxMenuItem cheatToggleItem = new JCheckBoxMenuItem("Developer Cheat Mode");
-        cheatToggleItem.setSelected(isCheatModeActive); // Centang sesuai status saat ini
-        cheatToggleItem.addActionListener(e -> {
-            isCheatModeActive = cheatToggleItem.isSelected();
-            if (isCheatModeActive) {
-                System.out.println("Developer Cheat Mode diaktifkan!");
-            } else {
-                System.out.println("Developer Cheat Mode dimatikan.");
+        // Posisikan di dekat tombol menu (pojok kanan atas)
+        java.awt.Point btnLoc = menuBtn.getLocationOnScreen();
+        int menuW = 220, menuH = 148;
+        menuWin.setBounds(btnLoc.x - menuW + menuBtn.getWidth(), btnLoc.y + menuBtn.getHeight() + 4, menuW, menuH);
+
+        // --- Panel utama custom-painted ---
+        JPanel menuPanel = new JPanel(null) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+                // Background
+                g2d.setColor(new Color(18, 14, 12, 250));
+                g2d.fillRoundRect(0, 0, w, h, 12, 12);
+                // Border emas
+                g2d.setColor(new Color(100, 75, 35));
+                g2d.setStroke(new BasicStroke(1.5f));
+                g2d.drawRoundRect(1, 1, w - 3, h - 3, 12, 12);
+                g2d.dispose();
             }
-        });
+        };
+        menuPanel.setOpaque(false);
+        menuPanel.setBounds(0, 0, menuW, menuH);
 
-        // Fitur Save yang dihidupkan kembali!
-        saveItem.addActionListener(e -> {
+        // Helper buat item menu
+        java.util.function.BiFunction<String, Runnable, JPanel> mkItem = (label, action) -> {
+            JPanel item = new JPanel(null) {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                    if (getClientProperty("hover") == Boolean.TRUE) {
+                        g2.setColor(new Color(50, 40, 25));
+                        g2.fillRoundRect(4, 1, getWidth() - 8, getHeight() - 2, 6, 6);
+                    }
+
+                    int bx = 12, by = getHeight() / 2 - 7, bs = 14;
+                    Color gold = new Color(185, 145, 60);
+                    Color goldDark = new Color(100, 75, 25);
+
+                    if (label.equals("Save Progress")) {
+                        // --- IKON FLOPPY DISK ---
+                        // Body luar
+                        g2.setColor(goldDark);
+                        g2.fillRect(bx, by, bs, bs);
+                        g2.setColor(gold);
+                        g2.setStroke(new BasicStroke(1.4f));
+                        g2.drawRect(bx, by, bs, bs);
+                        // Notch sudut kanan atas (ciri khas floppy)
+                        g2.setColor(new Color(18, 14, 12));
+                        g2.fillPolygon(new int[]{bx+9, bx+bs, bx+bs}, new int[]{by, by, by+5}, 3);
+                        g2.setColor(gold);
+                        g2.drawLine(bx+9, by, bx+bs, by+5);
+                        // Shutter (kotak kecil tengah atas)
+                        g2.setColor(new Color(130, 100, 35));
+                        g2.fillRect(bx+3, by, 5, 4);
+                        // Label area (kotak bawah)
+                        g2.setColor(new Color(130, 100, 35));
+                        g2.fillRect(bx+2, by+8, bs-4, bs-9);
+                        g2.setColor(gold);
+                        g2.setStroke(new BasicStroke(0.8f));
+                        g2.drawRect(bx+2, by+8, bs-4, bs-9);
+
+                    } else if (label.equals("Back to Main Menu")) {
+                        // --- IKON PANAH KIRI ---
+                        // Kepala panah (segitiga kiri)
+                        g2.setColor(gold);
+                        int[] px = {bx+5, bx+bs, bx+bs};
+                        int[] py = {by+7, by+1, by+13};
+                        g2.fillPolygon(px, py, 3);
+                        // Batang panah
+                        g2.fillRect(bx+bs, by+4, 1, 6);
+                        // Garis outline kepala
+                        g2.setColor(goldDark);
+                        g2.setStroke(new BasicStroke(0.8f));
+                        g2.drawPolygon(px, py, 3);
+                    }
+
+                    // Label teks
+                    g2.setFont(new Font("Georgia", Font.PLAIN, 13));
+                    g2.setColor(new Color(210, 185, 130));
+                    g2.drawString(label, 34, getHeight() / 2 + 5);
+                    g2.dispose();
+                }
+            };
+            item.setOpaque(false);
+            item.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            item.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override public void mouseEntered(java.awt.event.MouseEvent e) { item.putClientProperty("hover", true); item.repaint(); }
+                @Override public void mouseExited(java.awt.event.MouseEvent e)  { item.putClientProperty("hover", false); item.repaint(); }
+                @Override public void mouseClicked(java.awt.event.MouseEvent e) { menuWin.dispose(); if (action != null) action.run(); }
+            });
+            return item;
+        };
+
+        // --- Separator line helper ---
+        JPanel sep = new JPanel() {
+            @Override protected void paintComponent(Graphics g) {
+                g.setColor(new Color(70, 55, 30)); g.fillRect(10, 0, getWidth() - 20, 1);
+            }
+        };
+        sep.setOpaque(false);
+
+        // ---- ITEM 1: Save Progress ----
+        JPanel saveItem = mkItem.apply("Save Progress", () -> {
             String[] options = {"Slot 1", "Slot 2", "Slot 3"};
-            int choice = JOptionPane.showOptionDialog(window, "Pilih Slot Penyimpanan:", "Save Progress", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
-            if (choice >= 0) {
-                saveGameData(choice + 1);
+            int choice = JOptionPane.showOptionDialog(window, "Pilih Slot Penyimpanan:", "Save Progress",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+            if (choice >= 0) saveGameData(choice + 1);
+        });
+        saveItem.setBounds(0, 8, menuW, 36);
+
+        // ---- Separator 1 ----
+        JPanel sep1 = new JPanel() {
+            @Override protected void paintComponent(Graphics g) { g.setColor(new Color(60, 48, 28)); g.fillRect(10, 0, getWidth()-20, 1); }
+        };
+        sep1.setOpaque(false);
+        sep1.setBounds(0, 44, menuW, 2);
+
+        // ---- ITEM 2: Developer Mode (checkbox style) ----
+        JPanel devItem = new JPanel(null) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                if (getClientProperty("hover") == Boolean.TRUE) {
+                    g2.setColor(new Color(50, 40, 25));
+                    g2.fillRoundRect(4, 1, getWidth() - 8, getHeight() - 2, 6, 6);
+                }
+                // --- Checkbox: digambar langsung Java2D ---
+                int bx = 14, by = getHeight() / 2 - 6, bs = 12;
+                // Isi kotak: emas kalau aktif, gelap kalau tidak
+                g2.setColor(isCheatModeActive ? new Color(160, 120, 35) : new Color(35, 28, 18));
+                g2.fillRect(bx, by, bs, bs);
+                // Border kotak
+                g2.setColor(new Color(185, 145, 60));
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawRect(bx, by, bs, bs);
+                // Centang kalau aktif
+                if (isCheatModeActive) {
+                    g2.setColor(new Color(20, 14, 8));
+                    g2.setStroke(new BasicStroke(2.2f));
+                    g2.drawLine(bx + 2, by + 6, bx + 5, by + 9);
+                    g2.drawLine(bx + 5, by + 9, bx + 10, by + 3);
+                }
+                // Label teks
+                g2.setFont(new Font("Georgia", Font.PLAIN, 13));
+                g2.setColor(new Color(210, 185, 130));
+                g2.drawString("Developer Mode", 34, getHeight() / 2 + 5);
+                g2.dispose();
+            }
+        };
+        devItem.setOpaque(false);
+        devItem.setBounds(0, 46, menuW, 36);
+        devItem.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        devItem.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseEntered(java.awt.event.MouseEvent e) { devItem.putClientProperty("hover", true); devItem.repaint(); }
+            @Override public void mouseExited(java.awt.event.MouseEvent e)  { devItem.putClientProperty("hover", false); devItem.repaint(); }
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                isCheatModeActive = !isCheatModeActive;
+                devItem.repaint();
             }
         });
 
-        mainMenuItem.addActionListener(e -> {
+        // ---- Separator 2 ----
+        JPanel sep2 = new JPanel() {
+            @Override protected void paintComponent(Graphics g) { g.setColor(new Color(60, 48, 28)); g.fillRect(10, 0, getWidth()-20, 1); }
+        };
+        sep2.setOpaque(false);
+        sep2.setBounds(0, 82, menuW, 2);
+
+        // ---- ITEM 3: Back to Main Menu ----
+        JPanel backItem = mkItem.apply("Back to Main Menu", () -> {
             if (holdingBuilding != null) window.savedBuildings.add(holdingBuilding);
-            window.showScreen("MENU_SCREEN"); // Kembali ke Menu Utama
+            window.showScreen("MENU_SCREEN");
+        });
+        backItem.setBounds(0, 84, menuW, 36);
+
+        // ---- Tambah ke panel ----
+        menuPanel.add(saveItem);
+        menuPanel.add(sep1);
+        menuPanel.add(devItem);
+        menuPanel.add(sep2);
+        menuPanel.add(backItem);
+        menuWin.add(menuPanel);
+
+        // --- Tutup kalau klik di luar menu (pakai AWTEventListener, lebih reliable dari windowLostFocus) ---
+        java.awt.event.AWTEventListener[] closeListenerHolder = new java.awt.event.AWTEventListener[1];
+        closeListenerHolder[0] = event -> {
+            if (event instanceof MouseEvent) {
+                MouseEvent me = (MouseEvent) event;
+                if (me.getID() == MouseEvent.MOUSE_PRESSED) {
+                    java.awt.Point clickScreen = me.getLocationOnScreen();
+                    if (!menuWin.getBounds().contains(clickScreen)) {
+                        menuWin.dispose();
+                        java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(closeListenerHolder[0]);
+                    }
+                }
+            }
+        };
+        java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(
+                closeListenerHolder[0], AWTEvent.MOUSE_EVENT_MASK);
+
+        // Pastikan listener juga dihapus saat window di-dispose (anti-memory leak)
+        menuWin.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent e) {
+                java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(closeListenerHolder[0]);
+            }
         });
 
-        popup.add(saveItem);
-        popup.add(cheatToggleItem); // Menambahkan toggle cheat ke dalam popup menu
-        popup.addSeparator();
-        popup.add(mainMenuItem);
-        popup.show(this, getWidth() / 2 - 75, getHeight() / 2 - 50);
+        menuWin.setVisible(true);
     }
 
     // --- TAMBAHKAN FUNGSI PENYIMPANAN INI TEPAT DI BAWAHNYA ---
