@@ -98,6 +98,7 @@ public class GamePanel extends JPanel {
     private final float MAX_DARKNESS = 0.65f;
     private int currentDay = 1;
     public int totalWood = 0;
+    public int totalFood = 0;
 
     private FogOfWar fogOfWar;
     private static final float HEART_REVEAL_RADIUS = 500f;
@@ -221,6 +222,7 @@ public class GamePanel extends JPanel {
 
 
         cameraTimer = new Timer(16, e -> {
+            updateResourceBar();
             boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
 
             for (CivilBuilder cb : window.activeCivilBuilders) {
@@ -437,6 +439,13 @@ public class GamePanel extends JPanel {
                 dayNightTick = 0;
 
                 currentDay++;
+
+                // --- FITUR BARU: Setiap Farm yang sudah jadi, nambah 5 food tiap pagi ---
+                int farmCount = 0;
+                for (Building b : window.savedBuildings) {
+                    if (b.isBuilt && b.type == Building.BuildingType.FARM) farmCount++;
+                }
+                totalFood += farmCount * 5;
             }
 
             // Transisi pergantian langit super halus perlahan-lahan
@@ -1232,32 +1241,59 @@ public class GamePanel extends JPanel {
         };
     }
 
+    private JLabel[] resourceLabels;
+    private final String[] resourceTooltips = {
+            "Hari Bertahan Hidup",
+            "Wave Serangan Horde",
+            "Total Silver (Kekayaan)",
+            "Total Wood (Kayu)",
+            "Total Stone (Batu)",
+            "Total Steel (Baja)",
+            "Total Food (Makanan)",
+            "Total Civil (Penduduk)",
+            "Total Pasukan Guard",
+            "Total Bangunan"
+    };
+
+    // Dipanggil tiap tick dari cameraTimer supaya angka & posisi labelnya selalu update
+    private void updateResourceBar() {
+        int wave = 1;
+        int silver = 0;
+        int stone = 0;
+        int steel = 0;
+        int totalCivil = window.activeCivils.size();
+        int totalGuard = window.activeGuards.size();
+        int totalBuilding = window.savedBuildings.size();
+
+        String[] icons = {"📅", "💀", "🪙", "🪵", "🪨", "⚙️", "🍞", "👨‍🌾", "⚔️", "🏠"};
+        String[] values = {
+                String.valueOf(currentDay),
+                String.valueOf(wave),
+                String.valueOf(silver),
+                String.valueOf(totalWood),
+                String.valueOf(stone),
+                String.valueOf(steel),
+                String.valueOf(totalFood),
+                String.valueOf(totalCivil),
+                String.valueOf(totalGuard),
+                String.valueOf(totalBuilding)
+        };
+
+        int startX = 15;
+        int h = topRightBar.getHeight();
+        for (int i = 0; i < resourceLabels.length; i++) {
+            String text = icons[i] + " " + values[i];
+            resourceLabels[i].setText(text);
+            FontMetrics fm = resourceLabels[i].getFontMetrics(resourceLabels[i].getFont());
+            int textWidth = fm.stringWidth(text);
+            resourceLabels[i].setBounds(startX, 0, textWidth + 5, h);
+            startX += textWidth + 15;
+        }
+    }
+
     private void setupHUD() {
-        // --- HUD KANAN ATAS (THE PIRATE MAP) ---
-        topRightBar = new JPanel() {
-            private Rectangle[] hitboxes = new Rectangle[11];
-            private String[] tooltips = {
-                    "Hari Bertahan Hidup",
-                    "Wave Serangan Horde",
-                    "Total Silver (Kekayaan)",
-                    "Total Wood (Kayu)",
-                    "Total Stone (Batu)",
-                    "Total Steel (Baja)",
-                    "Total Food (Makanan)",
-                    "Persentase Konsumsi Makanan",
-                    "Total Civil (Penduduk)",
-                    "Total Pasukan Guard",
-                    "Total Bangunan"
-            };
-
-            @Override
-            public String getToolTipText(MouseEvent e) {
-                for (int i = 0; i < 11; i++) {
-                    if (hitboxes[i] != null && hitboxes[i].contains(e.getPoint())) return tooltips[i];
-                }
-                return null;
-            }
-
+        // --- HUD KANAN ATAS (TEMA GELAP KOTAK, SENADA MENU TITIK-3) ---
+        topRightBar = new JPanel(null) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
@@ -1266,73 +1302,33 @@ public class GamePanel extends JPanel {
                 int w = getWidth();
                 int h = getHeight();
 
-                // 1. Base Papan (Kertas Perkamen)
-                g2d.setColor(new Color(230, 215, 175, 240));
-                g2d.fillRoundRect(0, -15, w, h + 15, 20, 20);
+                // Background gelap kotak (bukan parchment/krem lagi)
+                g2d.setColor(new Color(18, 14, 12, 245));
+                g2d.fillRect(0, 0, w, h);
 
-                // 2. Garis Tepi (Solid Tanpa Jahitan)
-                g2d.setColor(new Color(140, 90, 50));
-                g2d.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2d.drawRoundRect(4, -15, w - 8, h + 11, 20, 20);
-                g2d.setStroke(new BasicStroke(1f));
-                g2d.drawRoundRect(8, -15, w - 16, h + 7, 20, 20);
-
-                // --- TEKS INDIKATOR (MEPET & DINAMIS) ---
-                g2d.setFont(new Font("Segoe UI Emoji", Font.BOLD, 18));
-                g2d.setColor(new Color(70, 40, 20));
-
-                int wave = 1;
-                int silver = 0;
-                int stone = 0;
-                int steel = 0;
-                int food = 0;
-                int konsumsi = 0;
-                int totalCivil = window.activeCivils.size();
-                int totalGuard = window.activeGuards.size();
-                int totalBuilding = window.savedBuildings.size();
-
-                String[] icons = {"📅", "💀", "🪙", "🪵", "🪨", "⚙️", "🍞", "🍖", "👨‍🌾", "⚔️", "🏠"};
-                String[] values = {
-                        String.valueOf(currentDay),
-                        String.valueOf(wave),
-                        String.valueOf(silver),
-                        String.valueOf(totalWood),
-                        String.valueOf(stone),
-                        String.valueOf(steel),
-                        String.valueOf(food),
-                        konsumsi + "%",
-                        String.valueOf(totalCivil),
-                        String.valueOf(totalGuard),
-                        String.valueOf(totalBuilding)
-                };
-
-                FontMetrics fm = g2d.getFontMetrics();
-                int textY = (h + fm.getAscent() - fm.getDescent()) / 2;
-                int startX = 20;
-
-                for (int i = 0; i < 11; i++) {
-                    String textToDraw = icons[i] + " " + values[i];
-                    g2d.drawString(textToDraw, startX, textY);
-
-                    int textWidth = fm.stringWidth(textToDraw);
-                    hitboxes[i] = new Rectangle(startX - 5, 0, textWidth + 10, h);
-
-                    // JARAK DINAMIS: Titik X selanjutnya adalah posisi sekarang + lebar tulisan + spasi 15 pixel (Mepet!)
-                    startX += textWidth + 15;
-                }
+                // Border emas tipis, 1 garis saja (gak dobel "jahitan" kayak sebelumnya)
+                g2d.setColor(new Color(100, 75, 35));
+                g2d.setStroke(new BasicStroke(1.5f));
+                g2d.drawRect(0, 0, w - 1, h - 1);
 
                 g2d.dispose();
             }
         };
         topRightBar.setLayout(null);
         topRightBar.setOpaque(false);
-        ToolTipManager.sharedInstance().setInitialDelay(100);
-        topRightBar.setToolTipText("");
 
-        // Atur agar tooltip cepat muncul tanpa perlu ditunggu lama
-        ToolTipManager.sharedInstance().setInitialDelay(100);
-        // Wajib mengosongkan string tooltip awal agar pendeteksi mouse di panel ini aktif
-        topRightBar.setToolTipText("");
+        // --- LABEL RESOURCE ASLI (JLabel, bukan drawString manual) ---
+        // Ini juga yang bikin emoji-nya tetap warna asli, bukan ke-tint 1 warna,
+        // karena JLabel render teks lewat jalur Swing yang beda dari Graphics2D.drawString().
+        resourceLabels = new JLabel[10];
+        for (int i = 0; i < resourceLabels.length; i++) {
+            JLabel lbl = new JLabel();
+            lbl.setFont(new Font("Segoe UI Emoji", Font.BOLD, 18));
+            lbl.setForeground(new Color(225, 205, 165)); // Krem keemasan, kontras di background gelap
+            lbl.setToolTipText(resourceTooltips[i]);
+            topRightBar.add(lbl);
+            resourceLabels[i] = lbl;
+        }
 
         // --- TOMBOL MENU (TINTA & KERTAS - TITIK 3) ---
         menuBtn = new JButton("⋮") {
@@ -1363,6 +1359,8 @@ public class GamePanel extends JPanel {
         menuBtn.setContentAreaFilled(false); menuBtn.setBorderPainted(false); menuBtn.setFocusPainted(false);
         menuBtn.addActionListener(e -> showInGameMenu());
         topRightBar.add(menuBtn); add(topRightBar);
+
+        updateResourceBar(); // Isi awal, sebelum cameraTimer sempat jalan
 
         bottomLeftBar = new JPanel(); bottomLeftBar.setLayout(null); bottomLeftBar.setOpaque(false);
 
