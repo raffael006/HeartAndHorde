@@ -17,7 +17,7 @@ public class Horde implements Serializable {
 
     // Atribut Posisi & Geometri
     public double x, y;
-    public int size = 24; // Samakan dengan Guard agar proporsinya imbang
+    public int size = 20; // Samakan dengan Guard agar proporsinya imbang
 
     // --- FITUR BARU: ARAH HADAP (Kiri/Kanan) ---
     // Default false = menghadap kiri (sesuai gambar asli 1Horde.png, 2Horde.png, 3Horde.png)

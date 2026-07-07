@@ -106,7 +106,7 @@ public class Building implements Serializable {
         if (type == BuildingType.FARM) return 108;    // Sesuaikan lebar farm.png
         if (type == BuildingType.STORAGE) return 70; // Sesuaikan lebar storage.png
         if (type == BuildingType.BARRACK) return 114; // Sesuaikan lebar barrack.png
-        if (type == BuildingType.BUILDER) return 90;   // di getVisualWidth
+        if (type == BuildingType.BUILDER) return 35;   // di getVisualWidth
 
         return 70;
     }
@@ -121,7 +121,7 @@ public class Building implements Serializable {
         if (type == BuildingType.FARM) return 61; // Sesuaikan tinggi farm.png
         if (type == BuildingType.STORAGE) return 45; // Sesuaikan tinggi storage.png
         if (type == BuildingType.BARRACK) return 71;
-        if (type == BuildingType.BUILDER) return 70;   // di getVisualHeight
+        if (type == BuildingType.BUILDER) return 35;   // di getVisualHeight
         return 70;
     }
 
@@ -188,6 +188,10 @@ public class Building implements Serializable {
             // (Disisakan ~4px di tiap sisi karena tepi gambarnya sedikit transparan/miring, bukan dinding solid.)
             return 150;
         }
+
+        if (type == BuildingType.BUILDER) {
+            return 80; // <-- atur lebar collision Builder di sini, sesuaikan ke rasa yang pas
+        }
         // Tipe lain (MEDIUM_HOUSE, BIG_HOUSE, STORAGE, BARRACK, WALL) sudah proporsional
         // antara lebar gambar & lebar pondasinya -> tidak diubah.
         // (FARM ditangani terpisah di computeSolidHitbox() - full gambar solid.)
@@ -197,7 +201,9 @@ public class Building implements Serializable {
     // Tinggi bagian depan (dinding+pintu) yang solid. Bagian atas (atap = "belakang" bangunan)
     // sengaja TIDAK solid supaya warga & militer bisa jalan seolah-olah di belakang bangunan.
     private static int getSolidHeight(BuildingType type, int fallbackHeight) {
-        // Sudah pas untuk semua tipe saat ini, dipertahankan seperti semula.
+        if (type == BuildingType.BUILDER) {
+            return 40; // <-- atur tinggi collision Builder, kalau mau beda dari default 40%
+        }
         return (int) (fallbackHeight * 0.40);
     }
 }

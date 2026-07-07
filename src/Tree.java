@@ -13,6 +13,7 @@ public class Tree implements Serializable {
     public boolean isHarvesting = false;
     public float harvestProgress = 0f;
     public float maxHarvest = 100f; // Semakin besar, semakin lama loadingnya
+    public CivilBuilder assignedBuilder = null;
 
     // Constructor: Dijalankan saat pohon baru "dilahirkan" ke dunia
     public Tree(int startX, int startY, int w, int h) {

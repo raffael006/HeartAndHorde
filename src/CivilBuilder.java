@@ -6,7 +6,7 @@ import java.util.List;
 public class CivilBuilder implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    public enum BuilderState { IDLE_HOME, MOVING_TO_SITE, BUILDING, RETURNING_HOME }
+    public enum BuilderState { IDLE_HOME, MOVING_TO_SITE, BUILDING, MOVING_TO_TREE, CHOPPING, RETURNING_HOME }
 
     public double x, y;
     public double homeX, homeY;
@@ -26,6 +26,8 @@ public class CivilBuilder implements Serializable {
     // Daftar bangunan lain yang menunggu digarap oleh builder ini setelah yang sekarang selesai.
     // FIFO (First In First Out) -> yang dipesan duluan, dikerjakan duluan.
     public List<Building> buildQueue = new java.util.LinkedList<>();
+    public Tree assignedTree = null;
+    public List<Tree> chopQueue = new java.util.LinkedList<>();
 
     public CivilBuilder(double homeX, double homeY, Building homeBuilding) {
         this.homeX = homeX;
@@ -74,6 +76,41 @@ public class CivilBuilder implements Serializable {
         state = BuilderState.MOVING_TO_SITE;
     }
 
+    public void assignToChop(Tree target, List<Building> allBuildings) {
+        this.assignedTree = target;
+        target.assignedBuilder = this;
+        this.buildingsRef = allBuildings;
+
+        double targetX = target.getBounds().getCenterX();
+        double targetY = target.getBounds().getCenterY();
+
+        List<Building> obstacles = buildSafeObstacleList(allBuildings, null);
+        setPath(PathFinder.findPath(x, y, targetX, targetY, obstacles));
+        state = BuilderState.MOVING_TO_TREE;
+    }
+
+    public void queueChop(Tree target, List<Building> allBuildings) {
+        target.assignedBuilder = this;
+        this.buildingsRef = allBuildings;
+
+        if (state == BuilderState.IDLE_HOME && assignedBuilding == null && assignedTree == null) {
+            assignToChop(target, allBuildings);
+        } else {
+            chopQueue.add(target);
+        }
+    }
+
+    // Dipanggil tiap kali 1 tugas kelar -> cari kerjaan berikutnya (build dulu, baru chop, baru pulang)
+    private void goToNextJobOrHome() {
+        if (!buildQueue.isEmpty()) {
+            assignToBuild(buildQueue.remove(0), buildingsRef);
+        } else if (!chopQueue.isEmpty()) {
+            assignToChop(chopQueue.remove(0), buildingsRef);
+        } else {
+            startReturningHome();
+        }
+    }
+
     // --- FITUR BARU: DIPANGGIL DARI GamePanel UNTUK MENGANTRIKAN BANGUNAN ---
     // Kalau builder ini lagi nganggur di rumah -> langsung berangkat sekarang juga.
     // Kalau builder ini lagi sibuk (jalan/bangun/pulang) -> taruh di antrean dulu,
@@ -97,12 +134,7 @@ public class CivilBuilder implements Serializable {
 
             case BUILDING:
                 if (assignedBuilding == null || assignedBuilding.isBuilt || assignedBuilding.isDemolishing) {
-                    // --- FITUR BARU: Cek antrean dulu sebelum pulang ---
-                    if (!buildQueue.isEmpty()) {
-                        assignToBuild(buildQueue.remove(0), buildingsRef);
-                    } else {
-                        startReturningHome();
-                    }
+                    goToNextJobOrHome();
                     return;
                 }
                 assignedBuilding.buildProgress += 1.0f;
@@ -110,22 +142,32 @@ public class CivilBuilder implements Serializable {
                     assignedBuilding.isBuilt = true;
                     assignedBuilding.assignedBuilder = null;
                     assignedBuilding = null;
-                    // --- FITUR BARU: Kalau masih ada bangunan lain di antrean,
-                    // langsung berangkat ke sana tanpa mampir pulang dulu ---
-                    if (!buildQueue.isEmpty()) {
-                        assignToBuild(buildQueue.remove(0), buildingsRef);
-                    } else {
-                        startReturningHome();
-                    }
+                    goToNextJobOrHome();
+                }
+                break;
+
+            case MOVING_TO_TREE:
+                moveAlongPath(() -> state = BuilderState.CHOPPING);
+                break;
+
+            case CHOPPING:
+                if (assignedTree == null) {
+                    goToNextJobOrHome();
+                    return;
+                }
+                assignedTree.harvestProgress += 1.0f;
+                if (assignedTree.harvestProgress >= assignedTree.maxHarvest) {
+                    assignedTree = null; // Progress udah penuh; GamePanel yang hapus pohonnya dari mapPohon
+                    goToNextJobOrHome();
                 }
                 break;
 
             case RETURNING_HOME:
                 moveAlongPath(() -> {
-                    // --- FITUR BARU: Kalau selama perjalanan pulang ternyata ada
-                    // bangunan baru masuk antrean, langsung balik lagi berangkat kerja ---
                     if (!buildQueue.isEmpty()) {
                         assignToBuild(buildQueue.remove(0), buildingsRef);
+                    } else if (!chopQueue.isEmpty()) {
+                        assignToChop(chopQueue.remove(0), buildingsRef);
                     } else {
                         state = BuilderState.IDLE_HOME;
                     }
@@ -134,7 +176,6 @@ public class CivilBuilder implements Serializable {
 
             case IDLE_HOME:
             default:
-                // Diam di dalam rumah, nunggu ditugasin GamePanel
                 break;
         }
     }

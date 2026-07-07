@@ -139,6 +139,12 @@ public class GamePanel extends JPanel {
         System.out.println(heart.getBounds());
         System.out.println("Jumlah building: " + window.savedBuildings.size());
 
+        window.activeCivilBuilders.add(new CivilBuilder(
+                heart.getBounds().getCenterX(),
+                heart.getBounds().getCenterY(),
+                heart
+        ));
+
 
         for (int i = 0; i < 5; i++) {
             window.activeCivils.add(new Civil(1500, 1500));
@@ -333,17 +339,12 @@ public class GamePanel extends JPanel {
 
             // --- LOGIKA PROGRESS TEBANG POHON ---
             for (List<Tree> daftarPohon : mapPohon.values()) {
-                // Kita pakai Iterator agar aman menghapus pohon dari daftar saat sedang di-loop
                 java.util.Iterator<Tree> it = daftarPohon.iterator();
                 while (it.hasNext()) {
                     Tree pohon = it.next();
-                    if (pohon.isHarvesting) {
-                        pohon.harvestProgress += 1.0f; // Kecepatan loading (bisa dikecilin kalau ketuaan)
-
-                        if (pohon.harvestProgress >= pohon.maxHarvest) {
-                            it.remove(); // Hapus pohon dari map
-                            totalWood += 5; // Yey! Kayu bertambah +5
-                        }
+                    if (pohon.harvestProgress >= pohon.maxHarvest) {
+                        it.remove();
+                        totalWood += 5;
                     }
                 }
             }
@@ -377,6 +378,32 @@ public class GamePanel extends JPanel {
                     }
                     if (chosenBuilder != null) {
                         chosenBuilder.queueBuilding(b, window.savedBuildings);
+                    }
+                }
+            }
+
+            // --- FITUR BARU: SISTEM ANTREAN CIVIL BUILDER UNTUK POHON ---
+            // (Dipindah keluar dari loop Mine supaya SELALU jalan tiap tick, bukan cuma
+            // pas kebetulan ada Mine yang lagi dibangun.)
+            for (List<Tree> daftarPohon : mapPohon.values()) {
+                for (Tree pohon : daftarPohon) {
+                    if (pohon.isHarvesting && pohon.assignedBuilder == null) {
+                        CivilBuilder chosenBuilder = null;
+                        for (CivilBuilder cb : window.activeCivilBuilders) {
+                            if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
+                                chosenBuilder = cb;
+                                break;
+                            }
+                        }
+                        if (chosenBuilder == null) {
+                            for (CivilBuilder cb : window.activeCivilBuilders) {
+                                int load = cb.buildQueue.size() + cb.chopQueue.size();
+                                int chosenLoad = (chosenBuilder == null) ? Integer.MAX_VALUE
+                                        : chosenBuilder.buildQueue.size() + chosenBuilder.chopQueue.size();
+                                if (load < chosenLoad) chosenBuilder = cb;
+                            }
+                        }
+                        if (chosenBuilder != null) chosenBuilder.queueChop(pohon, window.savedBuildings);
                     }
                 }
             }
@@ -873,6 +900,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.WALL_L || type == Building.BuildingType.WALL_R || type == Building.BuildingType.WALL_UD) return 10;
         if (type == Building.BuildingType.SMALL_HOUSE) return 70;
         if (type == Building.BuildingType.BIG_HOUSE) return 90;
+        if (type == Building.BuildingType.BUILDER) return 50;
         return 70;
     }
 

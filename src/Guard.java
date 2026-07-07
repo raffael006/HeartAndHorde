@@ -25,7 +25,7 @@ public class Guard implements Serializable {
     public double speed = 1.0;
 
     public double x, y;
-    public int size = 24;
+    public int size = 20;
     public boolean isSelected = false;
 
     // --- FITUR BARU: ARAH HADAP (Kiri/Kanan) ---
