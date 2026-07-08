@@ -13,6 +13,9 @@ public class Mine implements Serializable {
     public float buildProgress = 0f;
     public float maxBuild = 100f;        // Lama waktu loading membangun
 
+    // --- FITUR BARU: Mine sekarang butuh CivilBuilder yang mengerjakannya ---
+    public CivilBuilder assignedBuilder = null;
+
     public Mine(int x, int y) {
         this.x = x;
         this.y = y;

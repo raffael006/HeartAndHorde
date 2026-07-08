@@ -6,7 +6,7 @@ import java.util.List;
 public class CivilBuilder implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    public enum BuilderState { IDLE_HOME, MOVING_TO_SITE, BUILDING, MOVING_TO_TREE, CHOPPING, RETURNING_HOME }
+    public enum BuilderState { IDLE_HOME, MOVING_TO_SITE, BUILDING, MOVING_TO_TREE, CHOPPING, MOVING_TO_MINE, MINING, RETURNING_HOME }
 
     public double x, y;
     public double homeX, homeY;
@@ -28,6 +28,10 @@ public class CivilBuilder implements Serializable {
     public List<Building> buildQueue = new java.util.LinkedList<>();
     public Tree assignedTree = null;
     public List<Tree> chopQueue = new java.util.LinkedList<>();
+
+    // --- FITUR BARU: ANTREAN MINE ---
+    public Mine assignedMine = null;
+    public List<Mine> mineQueue = new java.util.LinkedList<>();
 
     public CivilBuilder(double homeX, double homeY, Building homeBuilding) {
         this.homeX = homeX;
@@ -100,12 +104,39 @@ public class CivilBuilder implements Serializable {
         }
     }
 
+    // --- FITUR BARU: DIPANGGIL DARI GamePanel UNTUK MENGIRIM BUILDER KE MINE ---
+    public void assignToMine(Mine target, List<Building> allBuildings) {
+        this.assignedMine = target;
+        target.assignedBuilder = this;
+        this.buildingsRef = allBuildings;
+
+        double targetX = target.getBounds().getCenterX();
+        double targetY = target.getBounds().getCenterY();
+
+        List<Building> obstacles = buildSafeObstacleList(allBuildings, null);
+        setPath(PathFinder.findPath(x, y, targetX, targetY, obstacles));
+        state = BuilderState.MOVING_TO_MINE;
+    }
+
+    public void queueMine(Mine target, List<Building> allBuildings) {
+        target.assignedBuilder = this;
+        this.buildingsRef = allBuildings;
+
+        if (state == BuilderState.IDLE_HOME && assignedBuilding == null && assignedTree == null && assignedMine == null) {
+            assignToMine(target, allBuildings);
+        } else {
+            mineQueue.add(target);
+        }
+    }
+
     // Dipanggil tiap kali 1 tugas kelar -> cari kerjaan berikutnya (build dulu, baru chop, baru pulang)
     private void goToNextJobOrHome() {
         if (!buildQueue.isEmpty()) {
             assignToBuild(buildQueue.remove(0), buildingsRef);
         } else if (!chopQueue.isEmpty()) {
             assignToChop(chopQueue.remove(0), buildingsRef);
+        } else if (!mineQueue.isEmpty()) {
+            assignToMine(mineQueue.remove(0), buildingsRef);
         } else {
             startReturningHome();
         }
@@ -162,12 +193,33 @@ public class CivilBuilder implements Serializable {
                 }
                 break;
 
+            case MOVING_TO_MINE:
+                moveAlongPath(() -> state = BuilderState.MINING);
+                break;
+
+            case MINING:
+                if (assignedMine == null || assignedMine.isBuilt) {
+                    goToNextJobOrHome();
+                    return;
+                }
+                assignedMine.buildProgress += 1.0f;
+                if (assignedMine.buildProgress >= assignedMine.maxBuild) {
+                    assignedMine.isBuilt = true;      // Ganti wujud ke mine.png!
+                    assignedMine.isBuilding = false;  // Matikan loading bar
+                    assignedMine.assignedBuilder = null;
+                    assignedMine = null;
+                    goToNextJobOrHome();
+                }
+                break;
+
             case RETURNING_HOME:
                 moveAlongPath(() -> {
                     if (!buildQueue.isEmpty()) {
                         assignToBuild(buildQueue.remove(0), buildingsRef);
                     } else if (!chopQueue.isEmpty()) {
                         assignToChop(chopQueue.remove(0), buildingsRef);
+                    } else if (!mineQueue.isEmpty()) {
+                        assignToMine(mineQueue.remove(0), buildingsRef);
                     } else {
                         state = BuilderState.IDLE_HOME;
                     }

@@ -108,10 +108,10 @@ public class GamePanel extends JPanel {
     // --- FITUR BARU: KAPASITAS MAKSIMAL RESOURCE (buat bar 0/100 di HUD) ---
     // Default 100 semua, bisa kamu naikin manual sesuai kebutuhan (misal nanti
     // dihubungkan ke Storage building buat nambah kapasitas Wood/Stone/Steel/Food).
-    public int maxWood = 100;
-    public int maxStone = 100;
-    public int maxSteel = 100;
-    public int maxFood = 100;
+    public int maxWood = 15;
+    public int maxStone = 15;
+    public int maxSteel = 15;
+    public int maxFood = 15;
     public int maxCivil = 100;
     public int maxGuard = 100;
 
@@ -436,20 +436,42 @@ public class GamePanel extends JPanel {
                 }
             }
 
-            // --- LOGIKA PROGRESS PEMBANGUNAN TAMBANG ---
+            // --- LOGIKA PEMBANGUNAN TAMBANG: SEKARANG BUTUH CIVILBUILDER ---
+            // Progress buildProgress-nya sekarang ditangani oleh CivilBuilder.update() (case MINING),
+            // di sini cuma tugas nyariin & ngirim builder ke Mine yang lagi butuh dibangun.
             for (Mine m : activeMines) {
-                if (m.isBuilding && !m.isBuilt) {
-                    m.buildProgress += 1.0f; // Kecepatan bangun
-
-                    if (m.buildProgress >= m.maxBuild) {
-                        m.isBuilt = true;      // Ganti wujud ke mine.png!
-                        m.isBuilding = false;  // Matikan loading bar
+                if (m.isBuilding && !m.isBuilt && m.assignedBuilder == null) {
+                    CivilBuilder chosenBuilder = null;
+                    for (CivilBuilder cb : window.activeCivilBuilders) {
+                        if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
+                            chosenBuilder = cb;
+                            break;
+                        }
                     }
+                    if (chosenBuilder == null) {
+                        for (CivilBuilder cb : window.activeCivilBuilders) {
+                            int load = cb.buildQueue.size() + cb.chopQueue.size() + cb.mineQueue.size();
+                            int chosenLoad = (chosenBuilder == null) ? Integer.MAX_VALUE
+                                    : chosenBuilder.buildQueue.size() + chosenBuilder.chopQueue.size() + chosenBuilder.mineQueue.size();
+                            if (load < chosenLoad) chosenBuilder = cb;
+                        }
+                    }
+                    if (chosenBuilder != null) chosenBuilder.queueMine(m, window.savedBuildings);
                 }
             }
 
             // --- TAMBAHKAN PEMBERSIH PANAH NON-AKTIF ---
             window.activeProjectiles.removeIf(p -> !p.active);
+
+            // --- FITUR BARU: Setiap Storage yang sudah jadi, nambah kapasitas max resource +25 ---
+            int builtStorageCount = 0;
+            for (Building b : window.savedBuildings) {
+                if (b.isBuilt && b.type == Building.BuildingType.STORAGE) builtStorageCount++;
+            }
+            maxWood = 15 + builtStorageCount * 25;
+            maxStone = 15 + builtStorageCount * 25;
+            maxSteel = 15 + builtStorageCount * 25;
+            maxFood = 15 + builtStorageCount * 25;
 
             // --- 5. LOGIKA SIKLUS SIANG & MALAM ---
             dayNightTick++;
@@ -489,6 +511,7 @@ public class GamePanel extends JPanel {
             repaint(); // (Ini bawaan aslinya, pastikan ini tetap di posisi paling bawah)
 
             if (topRightBar != null) topRightBar.repaint(); // Resource bar (icon+bar) update tiap tick
+            if (gridMenuPanel != null && gridMenuPanel.isVisible()) gridMenuPanel.repaint(); // Warna cost real-time
             repaint();
         });
         cameraTimer.start();
@@ -1038,33 +1061,44 @@ public class GamePanel extends JPanel {
         }
 
         else if (currentMenuState == MenuState.BUILDING_SELECTED) {
+            // --- FITUR BARU: Heart tidak boleh dipindah maupun dihancurkan ---
+            boolean isHeart = clickedBuilding != null && clickedBuilding.type == Building.BuildingType.HEART;
+
             // 1. Tombol UPGRADE (Sementara cuma print log)
             gridMenuPanel.add(createGridBtn("⬆️", () -> {
                 System.out.println("Fitur Upgrade akan segera hadir!");
             }, false));
 
-            // 2. Tombol MOVE (Angkat bangunan)
-            gridMenuPanel.add(createGridBtn("✋", () -> {
-                if (clickedBuilding != null) {
-                    holdingBuilding = clickedBuilding;
-                    window.savedBuildings.remove(clickedBuilding); // Cabut dari tanah
-                    clickedBuilding = null; // Lepaskan pilihan
-                    currentTool = ToolMode.MOVE;
-                    currentMenuState = MenuState.MAIN_MENU; // Kembalikan menu
-                    updateGridMenu();
-                    repaint();
-                }
-            }, false));
+            // 2. Tombol MOVE (Angkat bangunan) - disembunyikan kalau Heart
+            if (isHeart) {
+                gridMenuPanel.add(createGridBtn("", null, false));
+            } else {
+                gridMenuPanel.add(createGridBtn("✋", () -> {
+                    if (clickedBuilding != null) {
+                        holdingBuilding = clickedBuilding;
+                        window.savedBuildings.remove(clickedBuilding); // Cabut dari tanah
+                        clickedBuilding = null; // Lepaskan pilihan
+                        currentTool = ToolMode.MOVE;
+                        currentMenuState = MenuState.MAIN_MENU; // Kembalikan menu
+                        updateGridMenu();
+                        repaint();
+                    }
+                }, false));
+            }
 
-            // 3. Tombol DESTROY (Mulai Loading Hancur)
-            gridMenuPanel.add(createGridBtn("❌", () -> {
-                if (clickedBuilding != null) {
-                    clickedBuilding.isDemolishing = true; // Picu loading bar merah
-                    clickedBuilding = null;
-                    currentMenuState = MenuState.MAIN_MENU;
-                    updateGridMenu();
-                }
-            }, false));
+            // 3. Tombol DESTROY (Mulai Loading Hancur) - disembunyikan kalau Heart
+            if (isHeart) {
+                gridMenuPanel.add(createGridBtn("", null, false));
+            } else {
+                gridMenuPanel.add(createGridBtn("❌", () -> {
+                    if (clickedBuilding != null) {
+                        clickedBuilding.isDemolishing = true; // Picu loading bar merah
+                        clickedBuilding = null;
+                        currentMenuState = MenuState.MAIN_MENU;
+                        updateGridMenu();
+                    }
+                }, false));
+            }
 
             // Isi 8 kotak kosong dan 1 tombol kembali
             // --- FITUR BARU: Tombol "+" khusus muncul kalau bangunan yang diklik adalah BARRACK ---
@@ -1236,13 +1270,17 @@ public class GamePanel extends JPanel {
     private JButton createGridBtnBuilding(Building.BuildingType type, Runnable action, boolean isSelected) {
         BufferedImage img = getBuildImage(type);
         int cost = Building.getWoodCost(type);
-        boolean canAfford = totalWood >= cost;
 
         JButton btn = new JButton() {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // --- FIX: dihitung ulang TIAP repaint (bukan cuma sekali pas tombol dibuat) ---
+                // supaya warnanya beneran real-time ikut totalWood yang sekarang, tanpa perlu
+                // buka-tutup grid dulu buat lihat perubahannya.
+                boolean canAfford = totalWood >= cost;
 
                 if (isSelected || getModel().isRollover()) {
                     g2d.setColor(new Color(15, 12, 10));
@@ -1267,16 +1305,15 @@ public class GamePanel extends JPanel {
                     g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
                 }
 
-                // Kayu gak cukup -> tampilin badge icon kayu + angka yang dibutuhkan
-                if (!canAfford) {
-                    g2d.setColor(new Color(0, 0, 0, 180));
-                    g2d.fillRect(0, h - 16, w, 16);
+                // --- FITUR BARU: Badge cost SELALU ditampilkan (bukan cuma pas gak cukup) ---
+                // Hijau kalau totalWood cukup, merah kalau kurang -> real time tiap repaint.
+                g2d.setColor(new Color(0, 0, 0, 180));
+                g2d.fillRect(0, h - 16, w, 16);
 
-                    if (iconWood != null) g2d.drawImage(iconWood, 3, h - 15, 14, 14, null);
-                    g2d.setFont(new Font("Segoe UI", Font.BOLD, 11));
-                    g2d.setColor(new Color(230, 90, 90));
-                    g2d.drawString(String.valueOf(cost), 20, h - 4);
-                }
+                if (iconWood != null) g2d.drawImage(iconWood, 3, h - 15, 14, 14, null);
+                g2d.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                g2d.setColor(canAfford ? new Color(90, 220, 90) : new Color(230, 90, 90));
+                g2d.drawString(String.valueOf(cost), 20, h - 4);
 
                 g2d.dispose();
             }
@@ -1378,7 +1415,7 @@ public class GamePanel extends JPanel {
                 // index 0 = Day (lingkaran, bukan gambar), 1 = Wave (gambar, tanpa bar), sisanya (gambar + bar)
                 BufferedImage[] icons = {null, iconWave, iconWood, iconStone, iconSteel, iconFood, iconCivil, iconMilitary};
                 int[] values = {currentDay, wave, totalWood, totalStone, totalSteel, totalFood, totalCivil, totalGuard};
-                int[] maxValues = {-1, -1, maxWood, maxStone, maxSteel, maxFood, maxCivil, maxGuard}; // -1 = gak ada bar (Day & Wave)
+                int[] maxValues = {-1, -1, maxWood, maxStone, maxSteel, maxFood, -1, -1}; // -1 = gak ada bar (Day, Wave, Civil & Guard)
 
                 // --- UKURAN SERAGAM TIAP SLOT ---
                 int iconSize = 46;
@@ -1508,11 +1545,9 @@ public class GamePanel extends JPanel {
         JButton buildBtn = createColorButton(new Color(110, 55, 25), ToolMode.NONE, "🔨");
         buildBtn.setBounds(0, 0, mainSize, mainSize);
         buildBtn.addActionListener(e -> {
-            if (currentMenuState == MenuState.CLOSED) {
-                currentMenuState = MenuState.MAIN_MENU; gridMenuPanel.setVisible(true); updateGridMenu();
-            } else {
-                currentMenuState = MenuState.CLOSED; gridMenuPanel.setVisible(false); currentTool = ToolMode.NONE;
-            }
+            currentMenuState = MenuState.MAIN_MENU;
+            gridMenuPanel.setVisible(true);
+            updateGridMenu();
             holdingBuilding = null;
         });
         bottomLeftBar.add(buildBtn);
@@ -1545,7 +1580,8 @@ public class GamePanel extends JPanel {
                 g2d.drawRect(1, 1, getWidth() - 3, getHeight() - 3); g2d.dispose();
             }
         };
-        gridMenuPanel.setBounds(230, getHeight() - 200, 240, 180); gridMenuPanel.setVisible(false);
+        gridMenuPanel.setBounds(230, getHeight() - 200, 240, 180); gridMenuPanel.setVisible(true);
+        updateGridMenu(); // --- FIX: isi grid dari awal, jangan tunggu klik palu dulu ---
 
         // --- FITUR BARU: PANEL ANTREAN PRODUKSI BARRACK (tanpa grid, di sebelah kanan gridMenuPanel) ---
         barrackQueuePanel = new JPanel() {
