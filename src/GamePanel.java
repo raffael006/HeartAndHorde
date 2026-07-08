@@ -283,14 +283,14 @@ public class GamePanel extends JPanel {
             }
             fogOfWar.update();
 
-            // 2. Update Hordes (Parameter Nambah)
+            // 2. Update Hordes (Parameter Nambah -- sekarang bawa data Civil juga biar bisa niatin warga sipil)
             for (Horde h : window.activeHordes) {
-                h.update(window.activeHordes, window.activeGuards, window.activeProjectiles);
+                h.update(window.activeHordes, window.activeGuards, window.activeProjectiles, window.activeCivils);
             }
 
-            // --- UPDATE CIVIL (Jalan-jalan santai) ---
+            // --- UPDATE CIVIL (Jalan-jalan santai, kabur kalau ada Horde deket, pakai graph biar gak nabrak rumah) ---
             for (Civil c : window.activeCivils) {
-                c.update();
+                c.update(window.activeHordes, window.savedBuildings);
             }
 
             // =======================================================
@@ -350,11 +350,24 @@ public class GamePanel extends JPanel {
                         }
                     } else {
                         // Cek kena Guard
+                        boolean panahMenancap = false;
                         for (Guard guard : window.activeGuards) {
                             if (new Rectangle2D.Double(guard.x, guard.y, guard.size, guard.size).intersects(pHitbox)) {
                                 guard.currentHp -= p.getDamage();
                                 p.active = false; // Panah hilang menancap di badan
+                                panahMenancap = true;
                                 break;
+                            }
+                        }
+                        // --- FITUR BARU: Cek kena Civil juga (kalau panah Bowman niatin warga sipil) ---
+                        if (!panahMenancap) {
+                            for (Civil c : window.activeCivils) {
+                                if (c.hidden) continue; // Civil yang lagi ngumpet di rumah gak bisa kena panah
+                                if (new Rectangle2D.Double(c.x, c.y, c.size, c.size).intersects(pHitbox)) {
+                                    c.currentHp -= p.getDamage();
+                                    p.active = false;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -364,6 +377,7 @@ public class GamePanel extends JPanel {
             // 4. Bersihkan data (Mayat & Panah non-aktif)
             window.activeGuards.removeIf(g -> g.currentHp <= 0);
             window.activeHordes.removeIf(h -> h.currentHp <= 0);
+            window.activeCivils.removeIf(c -> c.currentHp <= 0); // --- FITUR BARU: Civil yang HP-nya habis dihapus juga
 
             // --- LOGIKA PROGRESS TEBANG POHON ---
             for (List<Tree> daftarPohon : mapPohon.values()) {
@@ -837,7 +851,8 @@ public class GamePanel extends JPanel {
                                     }
                                 } else {
                                     for (int i = 0; i < cap; i++) {
-                                        window.activeCivils.add(new Civil(spawnPointX, spawnPointY));
+                                        // --- FITUR BARU: Civil dikasih tau rumah asalnya (newBuilding) biar bisa kabur pulang ---
+                                        window.activeCivils.add(new Civil(spawnPointX, spawnPointY, newBuilding));
                                     }
                                 }
                             }

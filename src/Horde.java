@@ -61,7 +61,8 @@ public class Horde implements Serializable {
     }
 
     // Fungsi update menerima tambahan daftar Proyektil (GameWindow.activeProjectiles)
-    public void update(List<Horde> allHordes, List<Guard> allGuards, java.util.List<Projectile> allProjectiles) {
+    // --- FITUR BARU: Tambahan parameter allCivils, biar Horde bisa niatin warga sipil juga ---
+    public void update(List<Horde> allHordes, List<Guard> allGuards, java.util.List<Projectile> allProjectiles, List<Civil> allCivils) {
 
         long currentTime = System.currentTimeMillis();
 
@@ -78,55 +79,90 @@ public class Horde implements Serializable {
             }
         }
 
-        if (targetGuard != null) {
+        // --- FITUR BARU: Cari Civil terdekat juga (yang gak lagi ngumpet aman di rumah) ---
+        Civil targetCivil = null;
+        double minCivilDistance = 9999;
+        if (allCivils != null) {
+            for (Civil c : allCivils) {
+                if (c.hidden || c.currentHp <= 0) continue; // Civil yang lagi ngumpet gak bisa disamperin
+                double dx = this.x - c.x;
+                double dy = this.y - c.y;
+                double distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < minCivilDistance) {
+                    minCivilDistance = distance;
+                    targetCivil = c;
+                }
+            }
+        }
+
+        // --- FITUR BARU: Bandingin, mana yang lebih deket -> itu yang jadi sasaran Horde ---
+        boolean attackingCivil = false;
+        double targetX = 0, targetY = 0, minTargetDistance = -1;
+
+        if (targetCivil != null && (targetGuard == null || minCivilDistance < minDistance)) {
+            attackingCivil = true;
+            targetX = targetCivil.x;
+            targetY = targetCivil.y;
+            minTargetDistance = minCivilDistance;
+        } else if (targetGuard != null) {
+            targetX = targetGuard.x;
+            targetY = targetGuard.y;
+            minTargetDistance = minDistance;
+        }
+
+        if (minTargetDistance >= 0) {
             if (type == HordeType.BOWMAN) {
                 // --- LOGIKA BOWMAN (PANAH) ---
                 double attackRangePanahMusuh = 230.0; // Sedikit lebih pendek dari player biar imbang
 
-                if (minDistance <= attackRangePanahMusuh) {
+                if (minTargetDistance <= attackRangePanahMusuh) {
                     // Masuk jarak tembak: Berhenti dan Tembak (Cek cooldown)
                     // --- FITUR BARU: Saat menembak, tetap hadap ke arah target ---
-                    if (targetGuard.x > this.x + 0.1) facingRight = true;
-                    else if (targetGuard.x < this.x - 0.1) facingRight = false;
+                    if (targetX > this.x + 0.1) facingRight = true;
+                    else if (targetX < this.x - 0.1) facingRight = false;
 
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         // BUAT PROYEKTIL BARU (false = dari horde, damage 15)
-                        allProjectiles.add(new Projectile(x, y, targetGuard.x, targetGuard.y, false, attackDamage));
+                        allProjectiles.add(new Projectile(x, y, targetX, targetY, false, attackDamage));
                         lastAttackTime = currentTime;
                     }
                 } else {
                     // Di luar jarak tembak: Maju!
-                    double dx = targetGuard.x - this.x;
-                    double dy = targetGuard.y - this.y;
+                    double dx = targetX - this.x;
+                    double dy = targetY - this.y;
                     // --- FITUR BARU: Update arah hadap sesuai arah maju ---
                     if (dx > 0.1) facingRight = true;
                     else if (dx < -0.1) facingRight = false;
 
-                    this.x += (dx / minDistance) * speed;
-                    this.y += (dy / minDistance) * speed;
+                    this.x += (dx / minTargetDistance) * speed;
+                    this.y += (dy / minTargetDistance) * speed;
                 }
 
             } else {
                 // --- LOGIKA MELEE (AXEMAN & SHIELD - Tetap aslinya) ---
                 double attackRangeMeleeMusuh = size + 5;
-                if (minDistance <= attackRangeMeleeMusuh) {
+                if (minTargetDistance <= attackRangeMeleeMusuh) {
                     // --- FITUR BARU: Saat memukul, tetap hadap ke arah target ---
-                    if (targetGuard.x > this.x + 0.1) facingRight = true;
-                    else if (targetGuard.x < this.x - 0.1) facingRight = false;
+                    if (targetX > this.x + 0.1) facingRight = true;
+                    else if (targetX < this.x - 0.1) facingRight = false;
 
                     if (currentTime - lastAttackTime >= attackCooldown) {
-                        targetGuard.currentHp -= this.attackDamage;
+                        if (attackingCivil) {
+                            targetCivil.currentHp -= this.attackDamage;
+                        } else {
+                            targetGuard.currentHp -= this.attackDamage;
+                        }
                         lastAttackTime = currentTime;
                     }
                 } else {
-                    double dx = targetGuard.x - this.x;
-                    double dy = targetGuard.y - this.y;
+                    double dx = targetX - this.x;
+                    double dy = targetY - this.y;
                     // --- FITUR BARU: Update arah hadap sesuai arah maju ---
                     if (dx > 0.1) facingRight = true;
                     else if (dx < -0.1) facingRight = false;
 
-                    this.x += (dx / minDistance) * speed;
-                    this.y += (dy / minDistance) * speed;
+                    this.x += (dx / minTargetDistance) * speed;
+                    this.y += (dy / minTargetDistance) * speed;
                 }
             }
         }
