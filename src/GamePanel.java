@@ -33,6 +33,9 @@ public class GamePanel extends JPanel {
     private BufferedImage heartImg;
     private BufferedImage builderImg;
 
+    // --- FITUR BARU: ICON RESOURCE BAR (PNG asli, gantiin emoji) ---
+    private BufferedImage iconMilitary, iconWave, iconStone, iconWood, iconSteel, iconFood, iconCivil;
+
     // --- ADT Kamera ---
     private Camera camera = new Camera();
     private Timer cameraTimer;
@@ -101,6 +104,16 @@ public class GamePanel extends JPanel {
     public int totalFood = 0;
     public int totalStone = 0;
     public int totalSteel = 0;
+
+    // --- FITUR BARU: KAPASITAS MAKSIMAL RESOURCE (buat bar 0/100 di HUD) ---
+    // Default 100 semua, bisa kamu naikin manual sesuai kebutuhan (misal nanti
+    // dihubungkan ke Storage building buat nambah kapasitas Wood/Stone/Steel/Food).
+    public int maxWood = 100;
+    public int maxStone = 100;
+    public int maxSteel = 100;
+    public int maxFood = 100;
+    public int maxCivil = 100;
+    public int maxGuard = 100;
 
     private FogOfWar fogOfWar;
     private static final float HEART_REVEAL_RADIUS = 500f;
@@ -209,6 +222,18 @@ public class GamePanel extends JPanel {
         }
 
         try {
+            iconMilitary = ImageIO.read(new File("assets/img/Military-removebg-preview.png"));
+            iconWave = ImageIO.read(new File("assets/img/Wafe-removebg-preview.png"));
+            iconStone = ImageIO.read(new File("assets/img/Stone-removebg-preview.png"));
+            iconWood = ImageIO.read(new File("assets/img/Wood-removebg-preview.png"));
+            iconSteel = ImageIO.read(new File("assets/img/Steel-removebg-preview.png"));
+            iconFood = ImageIO.read(new File("assets/img/food-removebg-preview.png"));
+            iconCivil = ImageIO.read(new File("assets/img/Civil-removebg-preview.png"));
+        } catch (Exception e) {
+            System.out.println("Gagal memuat icon resource bar!");
+        }
+
+        try {
             wallLeftImg = ImageIO.read(new File("assets/img/woodenWall_L.png"));
             wallRightImg = ImageIO.read(new File("assets/img/woodenWall_R.png"));
             wallUDImg = ImageIO.read(new File("assets/img/WoodenWall_UD.png"));
@@ -224,7 +249,6 @@ public class GamePanel extends JPanel {
 
 
         cameraTimer = new Timer(16, e -> {
-            updateResourceBar();
             boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
 
             for (CivilBuilder cb : window.activeCivilBuilders) {
@@ -464,6 +488,7 @@ public class GamePanel extends JPanel {
 
             repaint(); // (Ini bawaan aslinya, pastikan ini tetap di posisi paling bawah)
 
+            if (topRightBar != null) topRightBar.repaint(); // Resource bar (icon+bar) update tiap tick
             repaint();
         });
         cameraTimer.start();
@@ -482,7 +507,7 @@ public class GamePanel extends JPanel {
                 int w = getWidth();
                 int h = getHeight();
                 if(topRightBar != null && bottomLeftBar != null) {
-                    topRightBar.setBounds(w - 830, 0, 830, 40);
+                    topRightBar.setBounds(w - 830, 0, 830, 56);
                     menuBtn.setBounds(topRightBar.getWidth() - 40, 4, 32, 32);
                     bottomLeftBar.setBounds(15, h - 310, 180, 80);
                     if (gridMenuPanel != null) gridMenuPanel.setBounds(230, h - 200, 240, 180);
@@ -969,11 +994,11 @@ public class GamePanel extends JPanel {
             boolean isBuilderSel = (selectedBuilding == Building.BuildingType.BUILDER);
 
 
-            // Hanya Emoji Tanpa Teks
-            gridMenuPanel.add(createGridBtn("🏠", () -> { selectedBuilding = Building.BuildingType.SMALL_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isSmall));
-            gridMenuPanel.add(createGridBtn("🏘️", () -> { selectedBuilding = Building.BuildingType.MEDIUM_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isMed));
-            gridMenuPanel.add(createGridBtn("🏰", () -> { selectedBuilding = Building.BuildingType.BIG_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isBig));
-            gridMenuPanel.add(createGridBtn("🧱", () -> {
+            // Sekarang pakai gambar sprite bangunan asli, kecuali kapak (biar tetap emoji)
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.SMALL_HOUSE, () -> { selectedBuilding = Building.BuildingType.SMALL_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isSmall));
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.MEDIUM_HOUSE, () -> { selectedBuilding = Building.BuildingType.MEDIUM_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isMed));
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.BIG_HOUSE, () -> { selectedBuilding = Building.BuildingType.BIG_HOUSE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isBig));
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.WALL_L, () -> {
                 selectedBuilding = Building.BuildingType.WALL_L; // Jadikan L sebagai default/pancingan awal
                 currentTool = ToolMode.BUILD;
                 updateGridMenu();
@@ -984,9 +1009,9 @@ public class GamePanel extends JPanel {
                 updateGridMenu();
                 repaint();
             }, isChop));
-            gridMenuPanel.add(createGridBtn("🌾", () -> { selectedBuilding = Building.BuildingType.FARM; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isFarm));
-            gridMenuPanel.add(createGridBtn("📦", () -> { selectedBuilding = Building.BuildingType.STORAGE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isStorage));
-            gridMenuPanel.add(createGridBtn("👷", () -> {
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.FARM, () -> { selectedBuilding = Building.BuildingType.FARM; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isFarm));
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.STORAGE, () -> { selectedBuilding = Building.BuildingType.STORAGE; currentTool = ToolMode.BUILD; updateGridMenu(); repaint(); }, isStorage));
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.BUILDER, () -> {
                 selectedBuilding = Building.BuildingType.BUILDER;
                 currentTool = ToolMode.BUILD;
                 updateGridMenu();
@@ -999,8 +1024,8 @@ public class GamePanel extends JPanel {
         else if (currentMenuState == MenuState.MILITARY_MENU) {
             boolean isBarrack = (selectedBuilding == Building.BuildingType.BARRACK);
 
-            // Tambahkan tombol Barrack
-            gridMenuPanel.add(createGridBtn("⚔️🏠", () -> {
+            // Tambahkan tombol Barrack (sekarang pakai gambar sprite asli)
+            gridMenuPanel.add(createGridBtnBuilding(Building.BuildingType.BARRACK, () -> {
                 selectedBuilding = Building.BuildingType.BARRACK;
                 currentTool = ToolMode.BUILD;
                 updateGridMenu();
@@ -1207,7 +1232,61 @@ public class GamePanel extends JPanel {
         return btn;
     }
 
-    // --- FITUR BARU: Slot info jumlah Civil tersedia di menu Barrack ---
+    // --- FITUR BARU: Tombol grid pakai gambar sprite BANGUNAN asli, gelap + badge cost kalau kayu kurang ---
+    private JButton createGridBtnBuilding(Building.BuildingType type, Runnable action, boolean isSelected) {
+        BufferedImage img = getBuildImage(type);
+        int cost = Building.getWoodCost(type);
+        boolean canAfford = totalWood >= cost;
+
+        JButton btn = new JButton() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                if (isSelected || getModel().isRollover()) {
+                    g2d.setColor(new Color(15, 12, 10));
+                } else {
+                    g2d.setColor(new Color(40, 35, 30));
+                }
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(new Color(80, 60, 35));
+                g2d.drawRect(0, 0, getWidth(), getHeight());
+
+                int w = getWidth(), h = getHeight();
+
+                if (img != null) {
+                    int imgSize = Math.min(w - 12, h - 12);
+                    int imgX = (w - imgSize) / 2;
+                    int imgY = (h - imgSize) / 2;
+
+                    if (!canAfford) {
+                        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f));
+                    }
+                    g2d.drawImage(img, imgX, imgY, imgSize, imgSize, null);
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                }
+
+                // Kayu gak cukup -> tampilin badge icon kayu + angka yang dibutuhkan
+                if (!canAfford) {
+                    g2d.setColor(new Color(0, 0, 0, 180));
+                    g2d.fillRect(0, h - 16, w, 16);
+
+                    if (iconWood != null) g2d.drawImage(iconWood, 3, h - 15, 14, 14, null);
+                    g2d.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                    g2d.setColor(new Color(230, 90, 90));
+                    g2d.drawString(String.valueOf(cost), 20, h - 4);
+                }
+
+                g2d.dispose();
+            }
+        };
+        btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+        if (action != null) btn.addActionListener(e -> action.run());
+        return btn;
+    }
+
+
     // Teks putih kalau cukup, merah kalau 0 (tidak bisa rekrut)
     private JPanel createCivilCountDisplay() {
         return new JPanel() {
@@ -1251,7 +1330,6 @@ public class GamePanel extends JPanel {
         };
     }
 
-    private JLabel[] resourceLabels;
     private final String[] resourceTooltips = {
             "Hari Bertahan Hidup",
             "Wave Serangan Horde",
@@ -1262,42 +1340,19 @@ public class GamePanel extends JPanel {
             "Total Civil (Penduduk)",
             "Total Pasukan Guard"
     };
-
-    // Dipanggil tiap tick dari cameraTimer supaya angka & posisi labelnya selalu update
-    private void updateResourceBar() {
-        int wave = 1;
-        int stone = totalStone;
-        int steel = totalSteel;
-        int totalCivil = window.activeCivils.size();
-        int totalGuard = window.activeGuards.size();
-
-        String[] icons = {"📅", "💀", "🪵", "🪨", "⚙️", "🍞", "👨‍🌾", "⚔️"};
-        String[] values = {
-                String.valueOf(currentDay),
-                String.valueOf(wave),
-                String.valueOf(totalWood),
-                String.valueOf(stone),
-                String.valueOf(steel),
-                String.valueOf(totalFood),
-                String.valueOf(totalCivil),
-                String.valueOf(totalGuard)
-        };
-
-        int startX = 15;
-        int h = topRightBar.getHeight();
-        for (int i = 0; i < resourceLabels.length; i++) {
-            String text = icons[i] + " " + values[i];
-            resourceLabels[i].setText(text);
-            FontMetrics fm = resourceLabels[i].getFontMetrics(resourceLabels[i].getFont());
-            int textWidth = fm.stringWidth(text);
-            resourceLabels[i].setBounds(startX, 0, textWidth + 5, h);
-            startX += textWidth + 15;
-        }
-    }
+    private Rectangle[] resourceHitboxes = new Rectangle[8];
 
     private void setupHUD() {
-        // --- HUD KANAN ATAS (TEMA GELAP KOTAK, SENADA MENU TITIK-3) ---
+        // --- HUD KANAN ATAS (TEMA GELAP KOTAK, ICON PNG + BAR KAPASITAS) ---
         topRightBar = new JPanel(null) {
+            @Override
+            public String getToolTipText(MouseEvent e) {
+                for (int i = 0; i < resourceHitboxes.length; i++) {
+                    if (resourceHitboxes[i] != null && resourceHitboxes[i].contains(e.getPoint())) return resourceTooltips[i];
+                }
+                return null;
+            }
+
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
@@ -1310,29 +1365,108 @@ public class GamePanel extends JPanel {
                 g2d.setColor(new Color(18, 14, 12, 245));
                 g2d.fillRect(0, 0, w, h);
 
-                // Border emas tipis, 1 garis saja (gak dobel "jahitan" kayak sebelumnya)
+                // Border emas tipis, 1 garis saja
                 g2d.setColor(new Color(100, 75, 35));
                 g2d.setStroke(new BasicStroke(1.5f));
                 g2d.drawRect(0, 0, w - 1, h - 1);
+
+                // --- DATA RESOURCE ---
+                int wave = 1;
+                int totalCivil = window.activeCivils.size();
+                int totalGuard = window.activeGuards.size();
+
+                // index 0 = Day (lingkaran, bukan gambar), 1 = Wave (gambar, tanpa bar), sisanya (gambar + bar)
+                BufferedImage[] icons = {null, iconWave, iconWood, iconStone, iconSteel, iconFood, iconCivil, iconMilitary};
+                int[] values = {currentDay, wave, totalWood, totalStone, totalSteel, totalFood, totalCivil, totalGuard};
+                int[] maxValues = {-1, -1, maxWood, maxStone, maxSteel, maxFood, maxCivil, maxGuard}; // -1 = gak ada bar (Day & Wave)
+
+                // --- UKURAN SERAGAM TIAP SLOT ---
+                int iconSize = 46;
+                int slotWidth = 78;
+                int slotGap = 20;
+                int barWidth = 40;
+                int barHeight = 12;
+
+                int startX = 12;
+                for (int i = 0; i < icons.length; i++) {
+                    int slotX = startX;
+                    boolean hasBar = maxValues[i] >= 0;
+
+                    // SEMUA icon sekarang di-tengah-in VERTIKAL penuh, seragam, gak ada bedanya
+                    // antara yang punya bar atau enggak.
+                    int iconY = (h - iconSize) / 2;
+
+                    if (i == 0) {
+                        // --- DAY: lingkaran + "1D", bukan gambar ---
+                        g2d.setColor(new Color(45, 35, 25));
+                        g2d.fillOval(slotX, iconY, iconSize, iconSize);
+                        g2d.setColor(new Color(100, 75, 35));
+                        g2d.setStroke(new BasicStroke(1.5f));
+                        g2d.drawOval(slotX, iconY, iconSize, iconSize);
+
+                        g2d.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                        g2d.setColor(new Color(225, 205, 165));
+                        String dayText = currentDay + "D";
+                        FontMetrics fmDay = g2d.getFontMetrics();
+                        int dayTextX = slotX + (iconSize - fmDay.stringWidth(dayText)) / 2;
+                        int dayTextY = iconY + (iconSize + fmDay.getAscent() - fmDay.getDescent()) / 2;
+                        g2d.drawString(dayText, dayTextX, dayTextY);
+
+                        resourceHitboxes[i] = new Rectangle(slotX - 4, 0, iconSize + 8, h);
+                        startX += iconSize + 8 + slotGap;
+                        continue;
+                    }
+
+                    if (icons[i] != null) {
+                        g2d.drawImage(icons[i], slotX, iconY, iconSize, iconSize, null);
+                    }
+
+                    int textX = slotX + iconSize + 6;
+                    g2d.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                    g2d.setColor(new Color(225, 205, 165));
+                    String valueText = hasBar ? values[i] + "/" + maxValues[i] : String.valueOf(values[i]);
+                    FontMetrics fmVal = g2d.getFontMetrics();
+
+                    if (hasBar) {
+                        // Blok "angka + bar" di-tengah-in vertikal sebagai 1 kesatuan,
+                        // jadi titik tengahnya SAMA PERSIS sama titik tengah icon (h/2).
+                        int gapBetween = 3;
+                        int textHeight = fmVal.getAscent(); // taksiran tinggi baris teks
+                        int contentBlockHeight = textHeight + gapBetween + barHeight;
+                        int blockTop = (h - contentBlockHeight) / 2;
+
+                        int textBaselineY = blockTop + textHeight;
+                        g2d.drawString(valueText, textX, textBaselineY);
+
+                        int barX = textX;
+                        int barY = blockTop + textHeight + gapBetween;
+
+                        g2d.setColor(new Color(0, 0, 0, 150));
+                        g2d.fillRect(barX, barY, barWidth, barHeight);
+
+                        float ratio = maxValues[i] == 0 ? 0f : Math.min(1f, (float) values[i] / maxValues[i]);
+                        g2d.setColor(new Color(80, 200, 120));
+                        g2d.fillRect(barX, barY, (int) (barWidth * ratio), barHeight);
+
+                        g2d.setColor(new Color(100, 75, 35));
+                        g2d.drawRect(barX, barY, barWidth, barHeight);
+                    } else {
+                        // Wave: angka di samping icon, di-tengah-in vertikal (sejajar sama Day)
+                        int textY = iconY + (iconSize + fmVal.getAscent() - fmVal.getDescent()) / 2;
+                        g2d.drawString(valueText, textX, textY);
+                    }
+
+                    resourceHitboxes[i] = new Rectangle(slotX - 4, 0, slotWidth, h);
+                    startX += slotWidth + slotGap;
+                }
 
                 g2d.dispose();
             }
         };
         topRightBar.setLayout(null);
         topRightBar.setOpaque(false);
-
-        // --- LABEL RESOURCE ASLI (JLabel, bukan drawString manual) ---
-        // Ini juga yang bikin emoji-nya tetap warna asli, bukan ke-tint 1 warna,
-        // karena JLabel render teks lewat jalur Swing yang beda dari Graphics2D.drawString().
-        resourceLabels = new JLabel[8];
-        for (int i = 0; i < resourceLabels.length; i++) {
-            JLabel lbl = new JLabel();
-            lbl.setFont(new Font("Segoe UI Emoji", Font.BOLD, 18));
-            lbl.setForeground(new Color(225, 205, 165)); // Krem keemasan, kontras di background gelap
-            lbl.setToolTipText(resourceTooltips[i]);
-            topRightBar.add(lbl);
-            resourceLabels[i] = lbl;
-        }
+        ToolTipManager.sharedInstance().setInitialDelay(100);
+        topRightBar.setToolTipText("");
 
         // --- TOMBOL MENU (TINTA & KERTAS - TITIK 3) ---
         menuBtn = new JButton("⋮") {
@@ -1364,7 +1498,8 @@ public class GamePanel extends JPanel {
         menuBtn.addActionListener(e -> showInGameMenu());
         topRightBar.add(menuBtn); add(topRightBar);
 
-        updateResourceBar(); // Isi awal, sebelum cameraTimer sempat jalan
+        // (Resource bar sekarang ngitung & gambar semuanya langsung di paintComponent tiap repaint,
+        // jadi gak perlu lagi manggil updateResourceBar() di sini.)
 
         bottomLeftBar = new JPanel(); bottomLeftBar.setLayout(null); bottomLeftBar.setOpaque(false);
 
