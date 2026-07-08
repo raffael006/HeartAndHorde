@@ -99,6 +99,8 @@ public class GamePanel extends JPanel {
     private int currentDay = 1;
     public int totalWood = 0;
     public int totalFood = 0;
+    public int totalStone = 0;
+    public int totalSteel = 0;
 
     private FogOfWar fogOfWar;
     private static final float HEART_REVEAL_RADIUS = 500f;
@@ -446,6 +448,14 @@ public class GamePanel extends JPanel {
                     if (b.isBuilt && b.type == Building.BuildingType.FARM) farmCount++;
                 }
                 totalFood += farmCount * 5;
+
+                // --- FITUR BARU: Setiap Mine yang sudah jadi, nambah 5 stone & 5 steel tiap pagi ---
+                int builtMineCount = 0;
+                for (Mine m : activeMines) {
+                    if (m.isBuilt) builtMineCount++;
+                }
+                totalStone += builtMineCount * 5;
+                totalSteel += builtMineCount * 5;
             }
 
             // Transisi pergantian langit super halus perlahan-lahan
@@ -1245,38 +1255,32 @@ public class GamePanel extends JPanel {
     private final String[] resourceTooltips = {
             "Hari Bertahan Hidup",
             "Wave Serangan Horde",
-            "Total Silver (Kekayaan)",
             "Total Wood (Kayu)",
             "Total Stone (Batu)",
             "Total Steel (Baja)",
             "Total Food (Makanan)",
             "Total Civil (Penduduk)",
-            "Total Pasukan Guard",
-            "Total Bangunan"
+            "Total Pasukan Guard"
     };
 
     // Dipanggil tiap tick dari cameraTimer supaya angka & posisi labelnya selalu update
     private void updateResourceBar() {
         int wave = 1;
-        int silver = 0;
-        int stone = 0;
-        int steel = 0;
+        int stone = totalStone;
+        int steel = totalSteel;
         int totalCivil = window.activeCivils.size();
         int totalGuard = window.activeGuards.size();
-        int totalBuilding = window.savedBuildings.size();
 
-        String[] icons = {"📅", "💀", "🪙", "🪵", "🪨", "⚙️", "🍞", "👨‍🌾", "⚔️", "🏠"};
+        String[] icons = {"📅", "💀", "🪵", "🪨", "⚙️", "🍞", "👨‍🌾", "⚔️"};
         String[] values = {
                 String.valueOf(currentDay),
                 String.valueOf(wave),
-                String.valueOf(silver),
                 String.valueOf(totalWood),
                 String.valueOf(stone),
                 String.valueOf(steel),
                 String.valueOf(totalFood),
                 String.valueOf(totalCivil),
-                String.valueOf(totalGuard),
-                String.valueOf(totalBuilding)
+                String.valueOf(totalGuard)
         };
 
         int startX = 15;
@@ -1320,7 +1324,7 @@ public class GamePanel extends JPanel {
         // --- LABEL RESOURCE ASLI (JLabel, bukan drawString manual) ---
         // Ini juga yang bikin emoji-nya tetap warna asli, bukan ke-tint 1 warna,
         // karena JLabel render teks lewat jalur Swing yang beda dari Graphics2D.drawString().
-        resourceLabels = new JLabel[10];
+        resourceLabels = new JLabel[8];
         for (int i = 0; i < resourceLabels.length; i++) {
             JLabel lbl = new JLabel();
             lbl.setFont(new Font("Segoe UI Emoji", Font.BOLD, 18));
