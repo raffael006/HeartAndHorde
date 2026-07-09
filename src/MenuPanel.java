@@ -164,12 +164,24 @@ public class MenuPanel extends JPanel {
         window.setVisible(true);
     }
 
+    @SuppressWarnings("unchecked")
     private boolean loadGameData(int slot) {
         File file = new File("heart_save_" + slot + ".dat");
         if (!file.exists()) return false;
 
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
             window.savedBuildings = (List<Building>) ois.readObject();
+            // --- FITUR BARU: Muat juga Civil/Guard/Horde/CivilBuilder/Mine dari save file baru ---
+            // (Save file LAMA cuma punya savedBuildings -> readObject berikutnya bakal gagal/EOF,
+            // makanya seluruh proses ini dibungkus try-catch yang sudah ada, biar aman gak crash,
+            // cuma nanti dianggap "gagal memuat" kalau formatnya save lama.)
+            window.activeCivils = (List<Civil>) ois.readObject();
+            window.activeGuards = (List<Guard>) ois.readObject();
+            window.activeHordes = (List<Horde>) ois.readObject();
+            window.activeCivilBuilders = (List<CivilBuilder>) ois.readObject();
+            if (window.gamePanel != null) {
+                window.gamePanel.activeMines = (List<Mine>) ois.readObject();
+            }
             return true;
         } catch (Exception e) {
             System.out.println("Gagal memuat game: " + e.getMessage());
@@ -446,19 +458,10 @@ public class MenuPanel extends JPanel {
                     break;
                 case "CAMPAIGN":
                     startFadeTransition(() -> {
-                        window.savedBuildings.clear();
-                        int heartSize = 80;
-                        int mapCenter = 3000 / 2;
-                        Building heart = new Building(
-                                mapCenter - heartSize / 2,
-                                mapCenter - heartSize / 2,
-                                heartSize,
-                                heartSize,
-                                Building.BuildingType.HEART,
-                                5
-                        );
-                        heart.isBuilt = true;
-                        window.savedBuildings.add(heart);
+                        // --- FITUR BARU: Pakai resetCampaign() dari GamePanel, biar SEMUA state lama
+                        // (building, civil, guard, horde, civil builder, projectile, mine, pohon) beneran
+                        // dibersihkan dulu -> gak ada lagi sisa data sesi sebelumnya yang nyangkut ---
+                        window.gamePanel.resetCampaign();
                     });
                     break;
                 case "OPTIONS":

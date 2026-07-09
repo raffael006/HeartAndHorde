@@ -118,7 +118,7 @@ public class Horde implements Serializable {
         // 4. Tapi kalau ngejar Civil udah kejauhan dari Building manapun -> nyerah, balik hancurin Building lain (termasuk Heart)
         final double AGGRO_GUARD_RADIUS = 250.0;     // Guard dianggap "di sekitar" kalau sedeket ini
         final double AGGRO_BUILDING_RADIUS = 250.0;  // Building dianggap "di sekitar" kalau sedeket ini
-        final double CIVIL_CHASE_LEASH = 500.0;      // Batas jauh ngejar Civil sebelum nyerah balik ke Building
+        final double CIVIL_CHASE_LEASH = 350.0;      // Batas jauh ngejar Civil sebelum nyerah balik ke Building
 
         boolean hasNearGuard = targetGuard != null && minDistance <= AGGRO_GUARD_RADIUS;
         boolean hasNearBuilding = targetBuildingCandidate != null && minBuildingDistance <= AGGRO_BUILDING_RADIUS;

@@ -126,17 +126,36 @@ public class GamePanel extends JPanel {
     private BufferedImage treeImg;
     //===================================================================================
 
-    public GamePanel(GameWindow window) {
-        this.window = window;
-        setLayout(null);
+    // --- FITUR BARU: RESET CAMPAIGN ---
+    // Dipanggil pas GamePanel pertama kali dibuat (constructor) MAUPUN pas tombol
+    // CAMPAIGN diklik ulang dari menu. Membersihkan SEMUA sisa data sesi sebelumnya
+    // (building, civil, guard, horde, civil builder, projectile, mine, pohon) dulu,
+    // baru bikin ulang dunia dari nol -> gak ada lagi sisa data yang numpuk/nyangkut.
+    public void resetCampaign() {
+        // 1. Bersihkan semua list state lama
+        window.savedBuildings.clear();
+        window.activeCivils.clear();
+        window.activeGuards.clear();
+        window.activeHordes.clear();
+        window.activeCivilBuilders.clear();
+        window.activeProjectiles.clear();
+        activeMines.clear();
+        mapPohon.clear();
 
-        // Tumbuhkan pohon di seluruh dunia!
+        // 2. Reset progres dasar
+        currentDay = 1;
+        isDayTime = true;
+        currentDarkness = 0f;
+        totalWood = 0;
+        totalStone = 0;
+        totalSteel = 0;
+        totalFood = 0;
+
+        // 3. Tumbuhkan ulang hutan & tambang
         generateForest();
-
-        // Panggil fungsi pembuat tambang
         generateMines();
 
-        // Posisi tengah map (map 3000 x 3000)
+        // 4. Posisi tengah map (map 3000 x 3000) -> bikin Heart baru
         int heartSize = 80;
         int mapCenter = 3000 / 2;
         Building heart = new Building(
@@ -161,10 +180,20 @@ public class GamePanel extends JPanel {
                 heart
         ));
 
-
         for (int i = 0; i < 5; i++) {
             window.activeCivils.add(new Civil(1500, 1500));
         }
+
+        repaint();
+    }
+
+    public GamePanel(GameWindow window) {
+        this.window = window;
+        setLayout(null);
+
+        // --- Setup awal campaign (forest, mine, Heart, CivilBuilder, Civil awal) ---
+        // Disatukan ke resetCampaign() biar constructor & tombol CAMPAIGN di menu selalu konsisten.
+        resetCampaign();
 
         try {
             abandonedMineImg = ImageIO.read(new File("assets/img/abandoned_mine.png"));
@@ -386,7 +415,7 @@ public class GamePanel extends JPanel {
                     Tree pohon = it.next();
                     if (pohon.harvestProgress >= pohon.maxHarvest) {
                         it.remove();
-                        totalWood += 5;
+                        totalWood = Math.min(maxWood, totalWood + 5);
                     }
                 }
             }
@@ -490,6 +519,13 @@ public class GamePanel extends JPanel {
             maxSteel = 15 + builtStorageCount * 25;
             maxFood = 15 + builtStorageCount * 25;
 
+            // --- FIX: Kalau max-nya mengecil (misal Storage dihancurkan), resource yang udah
+            // kepegang ikut dipotong juga -> gak lagi ada angka "kelebihan" kayak 40/15 ---
+            totalWood = Math.min(totalWood, maxWood);
+            totalStone = Math.min(totalStone, maxStone);
+            totalSteel = Math.min(totalSteel, maxSteel);
+            totalFood = Math.min(totalFood, maxFood);
+
             // --- 5. LOGIKA SIKLUS SIANG & MALAM ---
             dayNightTick++;
 
@@ -510,15 +546,15 @@ public class GamePanel extends JPanel {
                 for (Building b : window.savedBuildings) {
                     if (b.isBuilt && b.type == Building.BuildingType.FARM) farmCount++;
                 }
-                totalFood += farmCount * 5;
+                totalFood = Math.min(maxFood, totalFood + farmCount * 5);
 
                 // --- FITUR BARU: Setiap Mine yang sudah jadi, nambah 5 stone & 5 steel tiap pagi ---
                 int builtMineCount = 0;
                 for (Mine m : activeMines) {
                     if (m.isBuilt) builtMineCount++;
                 }
-                totalStone += builtMineCount * 5;
-                totalSteel += builtMineCount * 5;
+                totalStone = Math.min(maxStone, totalStone + builtMineCount * 5);
+                totalSteel = Math.min(maxSteel, totalSteel + builtMineCount * 5);
             }
 
             // Transisi pergantian langit super halus perlahan-lahan
@@ -1500,7 +1536,9 @@ public class GamePanel extends JPanel {
                         g2d.fillRect(barX, barY, barWidth, barHeight);
 
                         float ratio = maxValues[i] == 0 ? 0f : Math.min(1f, (float) values[i] / maxValues[i]);
-                        g2d.setColor(new Color(80, 200, 120));
+                        // --- FITUR BARU: Kalau udah penuh (mentok max), warna fill bar jadi merah gelap ---
+                        boolean isFull = maxValues[i] > 0 && values[i] >= maxValues[i];
+                        g2d.setColor(isFull ? new Color(150, 30, 30) : new Color(80, 200, 120));
                         g2d.fillRect(barX, barY, (int) (barWidth * ratio), barHeight);
 
                         g2d.setColor(new Color(100, 75, 35));
@@ -2187,8 +2225,14 @@ public class GamePanel extends JPanel {
     // --- TAMBAHKAN FUNGSI PENYIMPANAN INI TEPAT DI BAWAHNYA ---
     private void saveGameData(int slot) {
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("heart_save_" + slot + ".dat"))) {
-            // Kita mengambil data bangunan dari Sang Bos (window) lalu menyimpannya
+            // --- FITUR BARU: Sebelumnya cuma savedBuildings doang, sekarang Civil/Guard/Horde/
+            // CivilBuilder/Mine ikut disimpan juga biar pas di-load penduduk & pasukannya gak hilang ---
             oos.writeObject(window.savedBuildings);
+            oos.writeObject(window.activeCivils);
+            oos.writeObject(window.activeGuards);
+            oos.writeObject(window.activeHordes);
+            oos.writeObject(window.activeCivilBuilders);
+            oos.writeObject(activeMines);
             JOptionPane.showMessageDialog(window, "Progress kota berhasil disimpan di Slot " + slot + "!", "Save Success", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             System.out.println("Gagal menyimpan game: " + e.getMessage());

@@ -17,6 +17,9 @@ public class GameWindow extends JFrame {
     public List<Civil> activeCivils = new LinkedList<>();
     public List<CivilBuilder> activeCivilBuilders = new LinkedList<>();
 
+    // --- FITUR BARU: Simpan referensi GamePanel biar MenuPanel bisa panggil resetCampaign() ---
+    public GamePanel gamePanel;
+
     public GameWindow() {
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");
         setSize(1920, 1080);
@@ -44,7 +47,8 @@ public class GameWindow extends JFrame {
 
         // 2. Tambahkan layar menu utama dan gameplay
         mainContainer.add(new MenuPanel(this), "MENU_SCREEN");
-        mainContainer.add(new GamePanel(this), "GAME_SCREEN");
+        this.gamePanel = new GamePanel(this);
+        mainContainer.add(this.gamePanel, "GAME_SCREEN");
 
         setContentPane(mainContainer);
 
