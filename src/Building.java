@@ -26,11 +26,17 @@ public class Building implements Serializable {
     public float demolishProgress = 0f;
     public float maxDemolish = 100f; // Waktu untuk hancur
 
+    // --- FITUR BARU: DARAH BANGUNAN (biar bisa dihancurkan Horde) ---
+    public double maxHp;
+    public double currentHp;
+
     public Building(int x, int y, int width, int height, BuildingType type, int capacity) {
         this.bounds = new Rectangle(x, y, width, height);
         this.type = type;
         this.maxCapacity = capacity;
         this.occupants = new ArrayList<>();
+        this.maxHp = getMaxHpForType(type);
+        this.currentHp = this.maxHp;
     }
 
     public boolean isFull() { return occupants.size() >= maxCapacity; }
@@ -76,6 +82,26 @@ public class Building implements Serializable {
                 }
 
                 g2d.drawImage(finishedImg, drawX, drawY, drawWidth, drawHeight, null);
+            }
+
+            // --- FITUR BARU: BAR DARAH BANGUNAN (cuma tampil kalau udah jadi & belum full darah) ---
+            if (currentHp < maxHp) {
+                Rectangle hitbox = getSolidHitbox();
+                int barW = hitbox.width;
+                int barH = 5;
+                int barX = hitbox.x;
+                int barY = hitbox.y - 10;
+
+                g2d.setColor(new Color(60, 0, 0));
+                g2d.fillRect(barX, barY, barW, barH);
+
+                double hpPercentage = Math.max(0, currentHp / maxHp);
+                int fillHpW = (int) (barW * hpPercentage);
+                g2d.setColor(new Color(90, 220, 90));
+                g2d.fillRect(barX, barY, fillHpW, barH);
+
+                g2d.setColor(Color.BLACK);
+                g2d.drawRect(barX, barY, barW, barH);
             }
         }
 
@@ -139,6 +165,20 @@ public class Building implements Serializable {
         if (type == BuildingType.BUILDER) return 25;
 
         return 0; // Default (contoh: Heart) gratis
+    }
+
+    // --- FITUR BARU: DARAH MAKSIMAL SESUAI TIPE BANGUNAN ---
+    public static int getMaxHpForType(BuildingType type) {
+        if (type == BuildingType.HEART) return 500;       // Jantung basecamp, paling kuat
+        if (type == BuildingType.SMALL_HOUSE) return 60;
+        if (type == BuildingType.MEDIUM_HOUSE) return 100;
+        if (type == BuildingType.BIG_HOUSE) return 150;
+        if (type == BuildingType.WALL_L || type == BuildingType.WALL_R || type == BuildingType.WALL_UD) return 40;
+        if (type == BuildingType.FARM) return 70;
+        if (type == BuildingType.STORAGE) return 70;
+        if (type == BuildingType.BARRACK) return 120;
+        if (type == BuildingType.BUILDER) return 70;
+        return 100;
     }
 
     public Rectangle getBounds() { return bounds; }

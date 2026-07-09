@@ -1,4 +1,5 @@
 import java.awt.*;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.Serializable;
 import java.util.List;
@@ -61,8 +62,8 @@ public class Horde implements Serializable {
     }
 
     // Fungsi update menerima tambahan daftar Proyektil (GameWindow.activeProjectiles)
-    // --- FITUR BARU: Tambahan parameter allCivils, biar Horde bisa niatin warga sipil juga ---
-    public void update(List<Horde> allHordes, List<Guard> allGuards, java.util.List<Projectile> allProjectiles, List<Civil> allCivils) {
+    // --- FITUR BARU: Tambahan parameter allCivils & allBuildings, biar Horde bisa niatin warga sipil & bangunan juga ---
+    public void update(List<Horde> allHordes, List<Guard> allGuards, java.util.List<Projectile> allProjectiles, List<Civil> allCivils, List<Building> allBuildings) {
 
         long currentTime = System.currentTimeMillis();
 
@@ -95,16 +96,78 @@ public class Horde implements Serializable {
             }
         }
 
-        // --- FITUR BARU: Bandingin, mana yang lebih deket -> itu yang jadi sasaran Horde ---
+        // --- FITUR BARU: Cari Building terdekat juga (yang udah jadi & masih ada darahnya) ---
+        Building targetBuildingCandidate = null;
+        double minBuildingDistance = 9999;
+        if (allBuildings != null) {
+            for (Building b : allBuildings) {
+                if (!b.isBuilt || b.currentHp <= 0) continue;
+                Rectangle hb = b.getSolidHitbox();
+                double distance = distanceToRect(hb, this.x, this.y);
+                if (distance < minBuildingDistance) {
+                    minBuildingDistance = distance;
+                    targetBuildingCandidate = b;
+                }
+            }
+        }
+
+        // --- FITUR BARU: PRIORITAS BERTINGKAT (bukan lagi 'yang paling deket menang') ---
+        // 1. Guard yang ada DI SEKITAR horde ini -> prioritas utama
+        // 2. Kalau gak ada Guard di sekitar -> serang Building terdekat
+        // 3. Kalau Building di sekitar udah abis (gak ada yang deket) & ada Civil -> kejar Civil
+        // 4. Tapi kalau ngejar Civil udah kejauhan dari Building manapun -> nyerah, balik hancurin Building lain (termasuk Heart)
+        final double AGGRO_GUARD_RADIUS = 250.0;     // Guard dianggap "di sekitar" kalau sedeket ini
+        final double AGGRO_BUILDING_RADIUS = 250.0;  // Building dianggap "di sekitar" kalau sedeket ini
+        final double CIVIL_CHASE_LEASH = 500.0;      // Batas jauh ngejar Civil sebelum nyerah balik ke Building
+
+        boolean hasNearGuard = targetGuard != null && minDistance <= AGGRO_GUARD_RADIUS;
+        boolean hasNearBuilding = targetBuildingCandidate != null && minBuildingDistance <= AGGRO_BUILDING_RADIUS;
+
         boolean attackingCivil = false;
+        boolean attackingBuilding = false;
+        Building targetBuilding = null;
         double targetX = 0, targetY = 0, minTargetDistance = -1;
 
-        if (targetCivil != null && (targetGuard == null || minCivilDistance < minDistance)) {
-            attackingCivil = true;
-            targetX = targetCivil.x;
-            targetY = targetCivil.y;
-            minTargetDistance = minCivilDistance;
+        if (hasNearGuard) {
+            // 1. Guard di sekitar -> prioritas utama
+            targetX = targetGuard.x;
+            targetY = targetGuard.y;
+            minTargetDistance = minDistance;
+        } else if (hasNearBuilding) {
+            // 2. Gak ada Guard di sekitar -> serang Building terdekat
+            attackingBuilding = true;
+            targetBuilding = targetBuildingCandidate;
+            Point2D.Double nearestPoint = nearestPointOnRect(targetBuildingCandidate.getSolidHitbox(), this.x, this.y);
+            targetX = nearestPoint.x;
+            targetY = nearestPoint.y;
+            minTargetDistance = minBuildingDistance;
+        } else if (targetCivil != null) {
+            // 3. Building di sekitar udah abis, ada Civil -> kejar, KECUALI udah kejauhan dari Building manapun (leash)
+            boolean tooFarFromAnyBuilding = targetBuildingCandidate != null && minBuildingDistance > CIVIL_CHASE_LEASH;
+            if (tooFarFromAnyBuilding) {
+                // 4. Nyerah ngejar Civil -> balik hancurin Building lain (walau jauh, termasuk Heart)
+                attackingBuilding = true;
+                targetBuilding = targetBuildingCandidate;
+                Point2D.Double nearestPoint = nearestPointOnRect(targetBuildingCandidate.getSolidHitbox(), this.x, this.y);
+                targetX = nearestPoint.x;
+                targetY = nearestPoint.y;
+                minTargetDistance = minBuildingDistance;
+            } else {
+                attackingCivil = true;
+                targetX = targetCivil.x;
+                targetY = targetCivil.y;
+                minTargetDistance = minCivilDistance;
+            }
+        } else if (targetBuildingCandidate != null) {
+            // Fallback: gak ada Guard/Civil sama sekali, tapi masih ada Building -> tetep samperin walau jauh
+            attackingBuilding = true;
+            targetBuilding = targetBuildingCandidate;
+            Point2D.Double nearestPoint = nearestPointOnRect(targetBuildingCandidate.getSolidHitbox(), this.x, this.y);
+            targetX = nearestPoint.x;
+            targetY = nearestPoint.y;
+            minTargetDistance = minBuildingDistance;
         } else if (targetGuard != null) {
+            // Fallback terakhir: Guard jauh tapi gak ada target lain sama sekali
             targetX = targetGuard.x;
             targetY = targetGuard.y;
             minTargetDistance = minDistance;
@@ -122,8 +185,15 @@ public class Horde implements Serializable {
                     else if (targetX < this.x - 0.1) facingRight = false;
 
                     if (currentTime - lastAttackTime >= attackCooldown) {
-                        // BUAT PROYEKTIL BARU (false = dari horde, damage 15)
-                        allProjectiles.add(new Projectile(x, y, targetX, targetY, false, attackDamage));
+                        if (attackingBuilding) {
+                            // --- FITUR BARU: Panah ke Building damage langsung ---
+                            // (sistem collision Projectile yang ada cuma ngecek nabrak Horde/Guard, belum Building,
+                            // jadi biar Bowman tetap bisa "menembak" bangunan, damage-nya langsung dikenakan)
+                            targetBuilding.currentHp -= this.attackDamage;
+                        } else {
+                            // BUAT PROYEKTIL BARU (false = dari horde, damage 15)
+                            allProjectiles.add(new Projectile(x, y, targetX, targetY, false, attackDamage));
+                        }
                         lastAttackTime = currentTime;
                     }
                 } else {
@@ -149,6 +219,8 @@ public class Horde implements Serializable {
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         if (attackingCivil) {
                             targetCivil.currentHp -= this.attackDamage;
+                        } else if (attackingBuilding) {
+                            targetBuilding.currentHp -= this.attackDamage;
                         } else {
                             targetGuard.currentHp -= this.attackDamage;
                         }
@@ -195,6 +267,22 @@ public class Horde implements Serializable {
                 this.y += (dy / distance) * pushForce * 1.5;
             }
         }
+    }
+
+    // --- FITUR BARU: Helper hitung jarak dari titik (Horde) ke sisi terdekat rectangle Building ---
+    // Dipakai supaya jangkauan serang/deteksi Building tetap akurat walau bangunannya gede,
+    // (bukan ngukur ke titik tengah bangunan, yang bisa nyangkut jauh di dalam hitbox solid).
+    private double distanceToRect(Rectangle r, double px, double py) {
+        double cx = Math.max(r.x, Math.min(px, r.x + r.width));
+        double cy = Math.max(r.y, Math.min(py, r.y + r.height));
+        double dx = px - cx, dy = py - cy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private Point2D.Double nearestPointOnRect(Rectangle r, double px, double py) {
+        double cx = Math.max(r.x, Math.min(px, r.x + r.width));
+        double cy = Math.max(r.y, Math.min(py, r.y + r.height));
+        return new Point2D.Double(cx, cy);
     }
 
     public void draw(Graphics2D g2d, BufferedImage img) {

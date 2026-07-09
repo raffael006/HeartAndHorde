@@ -285,7 +285,7 @@ public class GamePanel extends JPanel {
 
             // 2. Update Hordes (Parameter Nambah -- sekarang bawa data Civil juga biar bisa niatin warga sipil)
             for (Horde h : window.activeHordes) {
-                h.update(window.activeHordes, window.activeGuards, window.activeProjectiles, window.activeCivils);
+                h.update(window.activeHordes, window.activeGuards, window.activeProjectiles, window.activeCivils, window.savedBuildings);
             }
 
             // --- UPDATE CIVIL (Jalan-jalan santai, kabur kalau ada Horde deket, pakai graph biar gak nabrak rumah) ---
@@ -397,6 +397,9 @@ public class GamePanel extends JPanel {
             }
             // Bersihkan jika sudah hancur total
             window.savedBuildings.removeIf(b -> b.isDemolishing && b.demolishProgress >= b.maxDemolish);
+
+            // --- FITUR BARU: Bersihkan building yang darahnya habis diserang Horde ---
+            window.savedBuildings.removeIf(b -> b.isBuilt && b.currentHp <= 0);
 
             for (Building b : window.savedBuildings) {
                 if (!b.isBuilt && b.assignedBuilder == null) {
