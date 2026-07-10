@@ -3,6 +3,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.util.List;
+import java.util.Random;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import javax.sound.sampled.*;
@@ -34,6 +35,28 @@ public class MenuPanel extends JPanel {
     // Tombol Save Slot
     private JButton slot1Btn, slot2Btn, slot3Btn;
 
+    // --- FITUR BARU: AMBIENT DARK TOWER DEFENSE — senada sama SplashPanel ---
+    private Timer ambientTimer;
+    private long tickCounter = 0;
+    private final Random ambientRandom = new Random();
+
+    private static class Ember {
+        float x, y, size, speed, driftPhase, driftSpeed, baseAlpha;
+    }
+    private static class Spark {
+        float x, y, size, speed, driftPhase, driftSpeed, baseAlpha, sway;
+        boolean warm;
+    }
+    private static class Fog {
+        float x, y, w, h, speed, baseAlpha;
+    }
+    private final List<Ember> ambientEmbers = new java.util.ArrayList<>();
+    private final List<Spark> ambientSparks = new java.util.ArrayList<>();
+    private final List<Fog> ambientFogs = new java.util.ArrayList<>();
+    private static final int AMBIENT_EMBER_COUNT = 26;
+    private static final int AMBIENT_SPARK_COUNT = 14;
+    private static final int AMBIENT_FOG_COUNT = 4;
+
     public MenuPanel(GameWindow window) {
         this.window = window;
         setLayout(null);
@@ -61,10 +84,41 @@ public class MenuPanel extends JPanel {
         loadBox.setVisible(false);
         add(loadBox);
 
+        // --- FITUR BARU: siapkan & jalankan ambient (kabut + partikel bara/debu) ---
+        for (int i = 0; i < AMBIENT_EMBER_COUNT; i++) ambientEmbers.add(spawnAmbientEmber(true));
+        for (int i = 0; i < AMBIENT_SPARK_COUNT; i++) ambientSparks.add(spawnAmbientSpark(true));
+        for (int i = 0; i < AMBIENT_FOG_COUNT; i++) ambientFogs.add(spawnAmbientFog(true));
+
+        ambientTimer = new Timer(30, e -> {
+            tickCounter++;
+            int w = Math.max(getWidth(), 1080);
+            int h = Math.max(getHeight(), 720);
+
+            for (int i = 0; i < ambientEmbers.size(); i++) {
+                Ember em = ambientEmbers.get(i);
+                em.y -= em.speed;
+                em.x += Math.sin((tickCounter * 0.02) + em.driftPhase) * em.driftSpeed;
+                if (em.y < -10) ambientEmbers.set(i, spawnAmbientEmber(false));
+            }
+            for (int i = 0; i < ambientSparks.size(); i++) {
+                Spark sp = ambientSparks.get(i);
+                sp.y -= sp.speed;
+                sp.x += Math.sin((tickCounter * 0.03) + sp.driftPhase) * sp.driftSpeed;
+                if (sp.y < -20) ambientSparks.set(i, spawnAmbientSpark(false));
+            }
+            for (Fog fog : ambientFogs) {
+                fog.x += fog.speed;
+                if (fog.x - fog.w / 2f > w) fog.x = -fog.w / 2f;
+            }
+            repaint();
+        });
+        ambientTimer.start();
+
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-                menuBox.setBounds(getWidth() - 350, (getHeight() - 460) / 2, 280, 460);
+                int menuW = 460, menuH = 300;
+                menuBox.setBounds((getWidth() - menuW) / 2, getHeight() - menuH - 40, menuW, menuH);
                 optionsBox.setBounds(0, 0, getWidth(), getHeight());
                 loadBox.setBounds(0, 0, getWidth(), getHeight());
             }
@@ -224,6 +278,7 @@ public class MenuPanel extends JPanel {
                 isTransitioning = false;
                 fadeAlpha = 0.0f;
                 menuBox.setVisible(true);
+
                 loadBox.setVisible(false);
                 isOverlayOpen = false;
             }
@@ -236,32 +291,14 @@ public class MenuPanel extends JPanel {
     // PEMBUAT UI (Menu, Options, Load)
     // ==========================================
     private JPanel createMenuBox() {
-        JPanel panel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2d.setColor(new Color(20, 15, 12, 190));
-                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-            }
-        };
-
+        JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setOpaque(false);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(160, 130, 95, 80), 1),
-                BorderFactory.createEmptyBorder(25, 20, 25, 20)));
-
-        JLabel menuTitle = new JLabel("MAIN MENU");
-        menuTitle.setFont(new Font("Serif", Font.BOLD, 18));
-        menuTitle.setForeground(new Color(215, 195, 165));
-        menuTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(menuTitle); panel.add(Box.createRigidArea(new Dimension(0, 25)));
 
         String[] menuItems = {"CONTINUE", "CAMPAIGN", "OPTIONS", "EXTRAS", "QUIT"};
         for (String item : menuItems) {
             panel.add(createMenuButton(item));
-            panel.add(Box.createRigidArea(new Dimension(0, 14)));
+            panel.add(Box.createRigidArea(new Dimension(0, 6)));
         }
         return panel;
     }
@@ -358,6 +395,22 @@ public class MenuPanel extends JPanel {
         JComboBox<String> cb = new JComboBox<>(items); cb.setFont(new Font("Serif", Font.PLAIN, 16)); cb.setBackground(new Color(45, 15, 10)); cb.setForeground(Color.WHITE); cb.setBorder(BorderFactory.createLineBorder(new Color(130, 85, 45), 1)); cb.setPreferredSize(new Dimension(220, 30)); return cb;
     }
 
+    // --- FITUR BARU: Panah kecil pengapit teks menu yang lagi aktif/hover (gaya referensi) ---
+    private void drawCaret(Graphics2D g2d, int cx, int cy, boolean pointLeft) {
+        Polygon p = new Polygon();
+        int size = 7;
+        if (pointLeft) {
+            p.addPoint(cx + size, cy - size);
+            p.addPoint(cx - size, cy);
+            p.addPoint(cx + size, cy + size);
+        } else {
+            p.addPoint(cx - size, cy - size);
+            p.addPoint(cx + size, cy);
+            p.addPoint(cx - size, cy + size);
+        }
+        g2d.fillPolygon(p);
+    }
+
     private JButton createSlotButton(int slotIndex) {
         JButton button = new JButton("SAVE SLOT " + slotIndex) {
             @Override
@@ -415,39 +468,66 @@ public class MenuPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                int yOffset = 0;
-                if (getModel().isPressed()) {
-                    g2d.setPaint(new GradientPaint(0, 0, new Color(55, 15, 10), 0, getHeight(), new Color(25, 5, 0)));
-                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
-                    g2d.setColor(new Color(180, 140, 80));
-                    g2d.setStroke(new BasicStroke(1.5f));
-                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
-                    g2d.setColor(new Color(200, 190, 170));
-                    yOffset = 2;
-                } else if (getModel().isRollover()) {
-                    g2d.setPaint(new GradientPaint(0, 0, new Color(135, 35, 25), 0, getHeight(), new Color(75, 15, 10)));
-                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
-                    g2d.setColor(new Color(230, 185, 110));
-                    g2d.setStroke(new BasicStroke(1.5f));
-                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
-                    g2d.setColor(new Color(255, 245, 220));
+                g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                boolean active = getModel().isRollover() || getModel().isPressed();
+                int cx = getWidth() / 2;
+                int cy = getHeight() / 2;
+
+                if (active) {
+                    // --- Item aktif: teks membesar, glow hangat, dikapit panah kiri-kanan ---
+                    Font font = new Font("Serif", Font.BOLD, 30);
+                    g2d.setFont(font);
+                    FontMetrics fm = g2d.getFontMetrics();
+                    int textWidth = fm.stringWidth(getText());
+                    int baselineY = cy + (fm.getAscent() - fm.getDescent()) / 2;
+
+                    // Glow lembut di belakang teks
+                    RadialGradientPaint glow = new RadialGradientPaint(
+                            new Point(cx, cy),
+                            Math.max(textWidth * 0.8f, 40f),
+                            new float[]{0f, 1f},
+                            new Color[]{new Color(255, 190, 110, 100), new Color(255, 190, 110, 0)}
+                    );
+                    g2d.setPaint(glow);
+                    g2d.fillOval(cx - textWidth, cy - 28, textWidth * 2, 56);
+
+                    // Panah pengapit kiri-kanan
+                    g2d.setColor(new Color(255, 205, 140, 230));
+                    int arrowGap = textWidth / 2 + 26;
+                    drawCaret(g2d, cx - arrowGap, cy, true);
+                    drawCaret(g2d, cx + arrowGap, cy, false);
+
+                    // Bayangan halus + teks emas-terang
+                    g2d.setColor(new Color(0, 0, 0, 150));
+                    g2d.drawString(getText(), cx - textWidth / 2 + 1, baselineY + 1);
+                    g2d.setPaint(new GradientPaint(0, cy - 16, new Color(255, 248, 225), 0, cy + 14, new Color(255, 200, 130)));
+                    g2d.drawString(getText(), cx - textWidth / 2, baselineY);
                 } else {
-                    g2d.setPaint(new GradientPaint(0, 0, new Color(85, 25, 15), 0, getHeight(), new Color(45, 10, 5)));
-                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
-                    g2d.setColor(new Color(130, 85, 45));
-                    g2d.setStroke(new BasicStroke(1.5f));
-                    g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
-                    g2d.setColor(Color.WHITE);
+                    // --- Item tidak aktif: teks polos, kecil, tanpa kotak/background ---
+                    Font font = new Font("Serif", Font.PLAIN, 20);
+                    g2d.setFont(font);
+                    FontMetrics fm = g2d.getFontMetrics();
+                    int textWidth = fm.stringWidth(getText());
+                    int baselineY = cy + (fm.getAscent() - fm.getDescent()) / 2;
+
+                    g2d.setColor(new Color(0, 0, 0, 130));
+                    g2d.drawString(getText(), cx - textWidth / 2 + 1, baselineY + 1);
+                    g2d.setColor(new Color(225, 220, 210, 220));
+                    g2d.drawString(getText(), cx - textWidth / 2, baselineY);
                 }
-                g2d.setFont(new Font("Serif", Font.PLAIN, 15));
-                FontMetrics fm = g2d.getFontMetrics();
-                g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2 + yOffset);
+
                 g2d.dispose();
             }
         };
-        button.setAlignmentX(Component.CENTER_ALIGNMENT); button.setMaximumSize(new Dimension(230, 42));
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(440, 46));
+        button.setPreferredSize(new Dimension(440, 46));
         button.setFocusPainted(false); button.setBorderPainted(false); button.setContentAreaFilled(false);
-        button.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); }});
+        button.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); button.repaint(); }
+            public void mouseExited(MouseEvent evt) { button.repaint(); }
+        });
 
         button.addActionListener(e -> {
             if (isTransitioning) return; // Kunci biar ga spam klik
@@ -478,6 +558,165 @@ public class MenuPanel extends JPanel {
         return button;
     }
 
+    // --- FITUR BARU: Helper spawn partikel ambient (debu, bara terbang, kabut) ---
+    private Ember spawnAmbientEmber(boolean randomHeight) {
+        Ember em = new Ember();
+        int w = Math.max(getWidth(), 1080);
+        int h = Math.max(getHeight(), 720);
+        em.x = ambientRandom.nextFloat() * w;
+        em.y = randomHeight ? ambientRandom.nextFloat() * h : h + ambientRandom.nextFloat() * 40;
+        em.size = 1.0f + ambientRandom.nextFloat() * 2.0f;
+        em.speed = 0.1f + ambientRandom.nextFloat() * 0.3f;
+        em.driftPhase = ambientRandom.nextFloat() * (float) (Math.PI * 2);
+        em.driftSpeed = 0.1f + ambientRandom.nextFloat() * 0.25f;
+        em.baseAlpha = 0.12f + ambientRandom.nextFloat() * 0.3f;
+        return em;
+    }
+
+    private Spark spawnAmbientSpark(boolean randomHeight) {
+        Spark sp = new Spark();
+        int w = Math.max(getWidth(), 1080);
+        int h = Math.max(getHeight(), 720);
+        sp.x = ambientRandom.nextFloat() * w;
+        sp.y = randomHeight ? ambientRandom.nextFloat() * h : h + ambientRandom.nextFloat() * 60;
+        sp.size = 1.4f + ambientRandom.nextFloat() * 2.0f;
+        sp.speed = 0.3f + ambientRandom.nextFloat() * 0.7f;
+        sp.driftPhase = ambientRandom.nextFloat() * (float) (Math.PI * 2);
+        sp.driftSpeed = 0.15f + ambientRandom.nextFloat() * 0.35f;
+        sp.sway = 0.5f + ambientRandom.nextFloat() * 1.3f;
+        sp.baseAlpha = 0.3f + ambientRandom.nextFloat() * 0.4f;
+        sp.warm = ambientRandom.nextFloat() < 0.82f;
+        return sp;
+    }
+
+    private Fog spawnAmbientFog(boolean randomX) {
+        Fog fog = new Fog();
+        int w = Math.max(getWidth(), 1080);
+        int h = Math.max(getHeight(), 720);
+        fog.w = w * (0.45f + ambientRandom.nextFloat() * 0.35f);
+        fog.h = fog.w * (0.16f + ambientRandom.nextFloat() * 0.08f);
+        fog.x = randomX ? ambientRandom.nextFloat() * (w + fog.w) - fog.w / 2f : -fog.w / 2f;
+        fog.y = h * (0.5f + ambientRandom.nextFloat() * 0.42f);
+        fog.speed = 0.06f + ambientRandom.nextFloat() * 0.1f;
+        fog.baseAlpha = 0.04f + ambientRandom.nextFloat() * 0.07f;
+        return fog;
+    }
+
+    // --- FITUR BARU: Render seluruh layer ambient (color grade, horizon glow, vignette, kabut, partikel) ---
+    private void drawAmbient(Graphics2D g2d, int width, int height) {
+        // Color grade dingin & kelam, senada SplashPanel
+        GradientPaint colorGrade = new GradientPaint(
+                0, 0, new Color(6, 8, 12, 110),
+                0, height, new Color(2, 3, 5, 170)
+        );
+        g2d.setPaint(colorGrade);
+        g2d.fillRect(0, 0, width, height);
+
+        g2d.setColor(new Color(10, 22, 18, 30));
+        g2d.fillRect(0, 0, width, height);
+
+        RadialGradientPaint bloodTint = new RadialGradientPaint(
+                new Point(width / 2, height / 2),
+                Math.max(width, height) * 0.9f,
+                new float[]{0f, 1f},
+                new Color[]{new Color(50, 0, 0, 0), new Color(20, 4, 4, 45)}
+        );
+        g2d.setPaint(bloodTint);
+        g2d.fillRect(0, 0, width, height);
+
+        float horizonFlicker = 0.75f + 0.25f * (float) Math.sin(tickCounter * 0.05);
+        RadialGradientPaint horizonGlow = new RadialGradientPaint(
+                new Point(width / 2, height + 40),
+                Math.max(width, height) * 0.6f,
+                new float[]{0f, 1f},
+                new Color[]{new Color(255, 90, 30, (int) (45 * horizonFlicker)), new Color(255, 90, 30, 0)}
+        );
+        g2d.setPaint(horizonGlow);
+        g2d.fillRect(0, 0, width, height);
+
+        RadialGradientPaint vignette = new RadialGradientPaint(
+                new Point(width / 2, height / 2),
+                Math.max(width, height) * 0.75f,
+                new float[]{0f, 1f},
+                new Color[]{new Color(0, 0, 0, 0), new Color(0, 0, 0, 130)}
+        );
+        g2d.setPaint(vignette);
+        g2d.fillRect(0, 0, width, height);
+
+        for (Fog fog : ambientFogs) {
+            Graphics2D fogG = (Graphics2D) g2d.create();
+            fogG.translate(fog.x, fog.y);
+            fogG.scale(1.0, fog.h / fog.w);
+            RadialGradientPaint fogPaint = new RadialGradientPaint(
+                    new Point(0, 0),
+                    fog.w / 2f,
+                    new float[]{0f, 1f},
+                    new Color[]{new Color(70, 75, 85, (int) (255 * fog.baseAlpha)), new Color(70, 75, 85, 0)}
+            );
+            fogG.setPaint(fogPaint);
+            fogG.fillOval((int) (-fog.w / 2f), (int) (-fog.w / 2f), (int) fog.w, (int) fog.w);
+            fogG.dispose();
+        }
+
+        for (Ember em : ambientEmbers) {
+            float flicker = 0.6f + 0.4f * (float) Math.sin((tickCounter * 0.06) + em.driftPhase * 3);
+            float a = Math.max(0f, Math.min(1f, em.baseAlpha * flicker));
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, a));
+            g2d.setColor(new Color(230, 225, 220));
+            g2d.fillOval((int) em.x, (int) em.y, (int) em.size, (int) em.size);
+        }
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+
+        for (Spark sp : ambientSparks) {
+            float flicker = 0.55f + 0.45f * (float) Math.sin((tickCounter * 0.08) + sp.driftPhase * 2);
+            float a = Math.max(0f, Math.min(1f, sp.baseAlpha * flicker));
+            Color core = sp.warm ? new Color(255, 150, 90) : new Color(210, 225, 240);
+            Color glow = sp.warm ? new Color(255, 150, 90, 0) : new Color(210, 225, 240, 0);
+
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, a * 0.5f));
+            g2d.setColor(core);
+            g2d.setStroke(new BasicStroke(sp.size * 0.6f));
+            g2d.drawLine((int) sp.x, (int) sp.y, (int) (sp.x - Math.sin(sp.driftPhase) * sp.sway), (int) (sp.y + sp.size * 5));
+
+            RadialGradientPaint sparkGlow = new RadialGradientPaint(
+                    new Point((int) sp.x, (int) sp.y),
+                    Math.max(sp.size * 3f, 1f),
+                    new float[]{0f, 1f},
+                    new Color[]{new Color(core.getRed(), core.getGreen(), core.getBlue(), (int) (140 * a)), glow}
+            );
+            g2d.setPaint(sparkGlow);
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, a));
+            g2d.fillOval((int) (sp.x - sp.size * 1.5f), (int) (sp.y - sp.size * 1.5f), (int) (sp.size * 3f), (int) (sp.size * 3f));
+
+            g2d.setColor(new Color(255, 245, 235, (int) (220 * a)));
+            g2d.fillOval((int) (sp.x - sp.size * 0.3f), (int) (sp.y - sp.size * 0.3f), (int) (sp.size * 0.6f), (int) (sp.size * 0.6f));
+        }
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+    }
+
+    // --- FITUR BARU: Ornamen bracket tipis di sudut kiri-atas & kanan-atas, gaya frame referensi ---
+    private void drawCornerOrnaments(Graphics2D g2d, int width, int height) {
+        Graphics2D o = (Graphics2D) g2d.create();
+        o.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        o.setColor(new Color(200, 165, 100, 150));
+        o.setStroke(new BasicStroke(1.2f));
+
+        int len = 46;
+        int margin = 18;
+
+        // Kiri-atas
+        o.drawLine(margin, margin, margin + len, margin);
+        o.drawLine(margin, margin, margin, margin + len);
+        o.fillOval(margin - 3, margin - 3, 6, 6);
+
+        // Kanan-atas
+        o.drawLine(width - margin, margin, width - margin - len, margin);
+        o.drawLine(width - margin, margin, width - margin, margin + len);
+        o.fillOval(width - margin - 3, margin - 3, 6, 6);
+
+        o.dispose();
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -487,6 +726,24 @@ public class MenuPanel extends JPanel {
         // 1. Gambar Background Menu
         if (backgroundImage != null) g2d.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), null);
         else { g2d.setPaint(new GradientPaint(0, 0, new Color(35, 25, 20), getWidth(), getHeight(), new Color(10, 8, 5))); g2d.fillRect(0, 0, getWidth(), getHeight()); }
+
+        // --- FITUR BARU: ambient dark tower defense (color grade, kabut, bara, vignette) ---
+        if (!isOverlayOpen) {
+            drawAmbient(g2d, getWidth(), getHeight());
+        }
+
+        // --- gradasi gelap tipis di bawah, biar list menu teks-polos tetap kebaca ---
+        // di atas background yang ramai (mirip nuansa referensi: area bawah lebih temaram)
+        if (!isOverlayOpen) {
+            GradientPaint bottomShade = new GradientPaint(
+                    0, getHeight() * 0.55f, new Color(0, 0, 0, 0),
+                    0, getHeight(), new Color(0, 0, 0, 150)
+            );
+            g2d.setPaint(bottomShade);
+            g2d.fillRect(0, 0, getWidth(), getHeight());
+
+            drawCornerOrnaments(g2d, getWidth(), getHeight());
+        }
 
         // 2. Render Judul Game jika tidak ada pop-up option/load
         if (!isOverlayOpen) {
