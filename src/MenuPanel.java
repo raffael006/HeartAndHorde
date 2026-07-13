@@ -22,6 +22,7 @@ public class MenuPanel extends JPanel {
     private JPanel menuBox;
     private JPanel optionsBox;
     private JPanel loadBox;
+    private JPanel difficultyBox; // --- FITUR BARU: Pilihan Easy/Medium/Hard sebelum Campaign mulai ---
     private boolean isOverlayOpen = false;
 
     // Komponen Video & Audio
@@ -84,6 +85,10 @@ public class MenuPanel extends JPanel {
         loadBox.setVisible(false);
         add(loadBox);
 
+        difficultyBox = createDifficultyBox();
+        difficultyBox.setVisible(false);
+        add(difficultyBox);
+
         // --- FITUR BARU: siapkan & jalankan ambient (kabut + partikel bara/debu) ---
         for (int i = 0; i < AMBIENT_EMBER_COUNT; i++) ambientEmbers.add(spawnAmbientEmber(true));
         for (int i = 0; i < AMBIENT_SPARK_COUNT; i++) ambientSparks.add(spawnAmbientSpark(true));
@@ -121,6 +126,7 @@ public class MenuPanel extends JPanel {
                 menuBox.setBounds((getWidth() - menuW) / 2, getHeight() - menuH - 40, menuW, menuH);
                 optionsBox.setBounds(0, 0, getWidth(), getHeight());
                 loadBox.setBounds(0, 0, getWidth(), getHeight());
+                difficultyBox.setBounds(0, 0, getWidth(), getHeight());
             }
 
             @Override
@@ -330,6 +336,98 @@ public class MenuPanel extends JPanel {
         return panel;
     }
 
+    // --- FITUR BARU: OVERLAY PILIHAN DIFFICULTY (Easy / Medium / Hard) ---
+    // Muncul begitu tombol CAMPAIGN diklik. Campaign baru benar-benar mulai
+    // (fade to black -> resetCampaign(Difficulty)) setelah salah satu dipilih.
+    private JPanel createDifficultyBox() {
+        JPanel panel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                g.setColor(new Color(15, 10, 8, 245));
+                g.fillRect(0, 0, getWidth(), getHeight());
+            }
+        };
+
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS)); panel.setOpaque(false);
+        panel.add(Box.createRigidArea(new Dimension(0, 100)));
+
+        JLabel title = new JLabel("SELECT DIFFICULTY");
+        title.setFont(new Font("Georgia", Font.BOLD, 36)); title.setForeground(new Color(230, 200, 150));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(title); panel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+        JLabel subtitle = new JLabel("Menentukan jenis, jumlah, dan kecepatan munculnya wave Horde");
+        subtitle.setFont(new Font("Serif", Font.ITALIC, 15)); subtitle.setForeground(new Color(170, 150, 120));
+        subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(subtitle); panel.add(Box.createRigidArea(new Dimension(0, 50)));
+
+        panel.add(createDifficultyButton("EASY", "Wave lebih jarang muncul, Horde lebih sedikit & lemah",
+                new Color(90, 190, 110), GameWindow.Difficulty.EASY));
+        panel.add(Box.createRigidArea(new Dimension(0, 22)));
+        panel.add(createDifficultyButton("MEDIUM", "Keseimbangan standar antara ancaman dan waktu bersiap",
+                new Color(220, 180, 70), GameWindow.Difficulty.MEDIUM));
+        panel.add(Box.createRigidArea(new Dimension(0, 22)));
+        panel.add(createDifficultyButton("HARD", "Wave datang lebih cepat, Horde lebih banyak & mematikan",
+                new Color(210, 70, 60), GameWindow.Difficulty.HARD));
+        panel.add(Box.createRigidArea(new Dimension(0, 55)));
+
+        JButton btnBack = createMenuButton("BACK TO MENU");
+        btnBack.setMaximumSize(new Dimension(300, 45)); panel.add(btnBack);
+        return panel;
+    }
+
+    private JButton createDifficultyButton(String label, String desc, Color accent, GameWindow.Difficulty diff) {
+        JButton button = new JButton(label) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                boolean hover = getModel().isRollover();
+                boolean pressed = getModel().isPressed();
+
+                Color top = pressed ? accent.darker().darker() : (hover ? accent.darker() : new Color(30, 28, 25));
+                Color bottom = pressed ? new Color(10, 10, 10) : (hover ? accent.darker().darker() : new Color(15, 13, 11));
+                g2d.setPaint(new GradientPaint(0, 0, top, 0, getHeight(), bottom));
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+
+                g2d.setColor(hover ? accent : accent.darker());
+                g2d.setStroke(new BasicStroke(hover ? 2.2f : 1.4f));
+                g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
+
+                g2d.setFont(new Font("Serif", Font.BOLD, 22));
+                FontMetrics fmT = g2d.getFontMetrics();
+                g2d.setColor(hover ? Color.WHITE : new Color(225, 220, 210));
+                g2d.drawString(label, (getWidth() - fmT.stringWidth(label)) / 2, 30);
+
+                g2d.setFont(new Font("Serif", Font.ITALIC, 13));
+                FontMetrics fmD = g2d.getFontMetrics();
+                g2d.setColor(new Color(190, 180, 165));
+                g2d.drawString(desc, (getWidth() - fmD.stringWidth(desc)) / 2, 52);
+
+                g2d.dispose();
+            }
+        };
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(520, 68));
+        button.setPreferredSize(new Dimension(520, 68));
+        button.setFocusPainted(false); button.setBorderPainted(false); button.setContentAreaFilled(false);
+        button.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent evt) { playHoverSound("assets/music/342200__christopherderp__videogame-menu-button-click.wav"); button.repaint(); }
+            public void mouseExited(MouseEvent evt) { button.repaint(); }
+        });
+
+        button.addActionListener(e -> {
+            if (isTransitioning) return; // Kunci biar ga spam klik
+            window.selectedDifficulty = diff;
+            startFadeTransition(() -> {
+                // --- FITUR BARU: resetCampaign(Difficulty) -> bersihkan SEMUA state lama SEKALIGUS
+                // atur jenis/jumlah/kecepatan Horde tiap wave sesuai difficulty yang dipilih ---
+                window.gamePanel.resetCampaign(diff);
+            });
+        });
+        return button;
+    }
+
     private JPanel createOptionsBox() {
         JPanel panel = new JPanel() {
             @Override
@@ -537,12 +635,10 @@ public class MenuPanel extends JPanel {
                     updateLoadBoxUI(); isOverlayOpen = true; menuBox.setVisible(false); loadBox.setVisible(true); repaint();
                     break;
                 case "CAMPAIGN":
-                    startFadeTransition(() -> {
-                        // --- FITUR BARU: Pakai resetCampaign() dari GamePanel, biar SEMUA state lama
-                        // (building, civil, guard, horde, civil builder, projectile, mine, pohon) beneran
-                        // dibersihkan dulu -> gak ada lagi sisa data sesi sebelumnya yang nyangkut ---
-                        window.gamePanel.resetCampaign();
-                    });
+                    // --- FITUR BARU: Sebelum langsung masuk game, tampilkan dulu pilihan
+                    // Difficulty (Easy/Medium/Hard). Campaign baru benar-benar dimulai
+                    // setelah salah satu opsi dipilih (lihat createDifficultyBox()).
+                    isOverlayOpen = true; menuBox.setVisible(false); difficultyBox.setVisible(true); repaint();
                     break;
                 case "OPTIONS":
                     isOverlayOpen = true; menuBox.setVisible(false); optionsBox.setVisible(true); repaint();
@@ -550,7 +646,7 @@ public class MenuPanel extends JPanel {
                 case "BACK TO MENU":
                 case "APPLY & BACK":
                     if (text.equals("APPLY & BACK")) { applyVideoSettings(); applyAudioSettings(); }
-                    isOverlayOpen = false; optionsBox.setVisible(false); loadBox.setVisible(false); menuBox.setVisible(true); repaint();
+                    isOverlayOpen = false; optionsBox.setVisible(false); loadBox.setVisible(false); difficultyBox.setVisible(false); menuBox.setVisible(true); repaint();
                     break;
                 case "QUIT": System.exit(0); break;
             }

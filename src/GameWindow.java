@@ -20,6 +20,13 @@ public class GameWindow extends JFrame {
     // --- FITUR BARU: Simpan referensi GamePanel biar MenuPanel bisa panggil resetCampaign() ---
     public GamePanel gamePanel;
 
+    // --- FITUR BARU: SISTEM DIFFICULTY CAMPAIGN (Easy / Medium / Hard) ---
+    // Dipilih di MenuPanel sebelum tombol CAMPAIGN benar-benar memulai game,
+    // lalu dibaca GamePanel.resetCampaign(Difficulty) buat nentuin jenis, jumlah,
+    // dan kecepatan munculnya Horde tiap wave.
+    public enum Difficulty { EASY, MEDIUM, HARD }
+    public Difficulty selectedDifficulty = Difficulty.MEDIUM;
+
     public GameWindow() {
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");
         setSize(1920, 1080);
@@ -56,7 +63,7 @@ public class GameWindow extends JFrame {
         showScreen("SPLASH_SCREEN");
     }
 
-    // Fungsi sakti untuk berpindah layar dengan 1 baris kode
+    // Fungsi sakti untuk berpindah layar dengan 1 baris kodea
     public void showScreen(String screenName) {
         cardLayout.show(mainContainer, screenName);
     }

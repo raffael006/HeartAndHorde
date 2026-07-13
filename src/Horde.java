@@ -33,6 +33,12 @@ public class Horde implements Serializable {
     public long lastAttackTime = 0;
     public long attackCooldown = 1200; // Musuh memukul sedikit lebih lambat (1.2 detik)
     public double attackRange = size + 5;
+    // --- FITUR BARU: PATHFINDING BUAT JALAN NGEDEKATIN TARGET + FALLBACK HANCURIN TEMBOK ---
+    public transient java.util.List<Point> path = null;
+    public int pathIndex = 0;
+    private long lastChasePathTime = 0;
+    private static final long CHASE_REPATH_COOLDOWN = 600; // ms, jangan itung ulang A* tiap frame
+    private Building forcedWallTarget = null; // Diisi kalau lagi kejebak & harus mecahin tembok dulu
 
     public Horde(HordeType type, double startX, double startY) {
         this.type = type;
@@ -173,10 +179,26 @@ public class Horde implements Serializable {
             minTargetDistance = minDistance;
         }
 
+        // --- Kalau lagi kejebak & harus mecahin tembok, override target ke tembok itu ---
+        if (forcedWallTarget != null) {
+            if (forcedWallTarget.currentHp <= 0 || !forcedWallTarget.isBuilt) {
+                forcedWallTarget = null; // Tembok udah hancur, lepas override
+            } else {
+                attackingBuilding = true;
+                attackingCivil = false;
+                targetBuilding = forcedWallTarget;
+                Point2D.Double np = nearestPointOnRect(forcedWallTarget.getSolidHitbox(), this.x, this.y);
+                targetX = np.x;
+                targetY = np.y;
+                minTargetDistance = distanceToRect(forcedWallTarget.getSolidHitbox(), this.x, this.y);
+            }
+        }
+
+
         if (minTargetDistance >= 0) {
             if (type == HordeType.BOWMAN) {
                 // --- LOGIKA BOWMAN (PANAH) ---
-                double attackRangePanahMusuh = 230.0; // Sedikit lebih pendek dari player biar imbang
+                double attackRangePanahMusuh = 250.0; // Sedikit lebih pendek dari player biar imbang
 
                 if (minTargetDistance <= attackRangePanahMusuh) {
                     // Masuk jarak tembak: Berhenti dan Tembak (Cek cooldown)
@@ -197,15 +219,8 @@ public class Horde implements Serializable {
                         lastAttackTime = currentTime;
                     }
                 } else {
-                    // Di luar jarak tembak: Maju!
-                    double dx = targetX - this.x;
-                    double dy = targetY - this.y;
-                    // --- FITUR BARU: Update arah hadap sesuai arah maju ---
-                    if (dx > 0.1) facingRight = true;
-                    else if (dx < -0.1) facingRight = false;
-
-                    this.x += (dx / minTargetDistance) * speed;
-                    this.y += (dy / minTargetDistance) * speed;
+                    // Di luar jarak tembak: Maju! (sekarang pakai PathFinder, bukan garis lurus)
+                    moveTowardTarget(targetX, targetY, allBuildings);
                 }
 
             } else {
@@ -227,14 +242,8 @@ public class Horde implements Serializable {
                         lastAttackTime = currentTime;
                     }
                 } else {
-                    double dx = targetX - this.x;
-                    double dy = targetY - this.y;
-                    // --- FITUR BARU: Update arah hadap sesuai arah maju ---
-                    if (dx > 0.1) facingRight = true;
-                    else if (dx < -0.1) facingRight = false;
-
-                    this.x += (dx / minTargetDistance) * speed;
-                    this.y += (dy / minTargetDistance) * speed;
+                    // Di luar jarak serang: Maju! (sekarang pakai PathFinder, bukan garis lurus)
+                    moveTowardTarget(targetX, targetY, allBuildings);
                 }
             }
         }
@@ -283,6 +292,102 @@ public class Horde implements Serializable {
         double cx = Math.max(r.x, Math.min(px, r.x + r.width));
         double cy = Math.max(r.y, Math.min(py, r.y + r.height));
         return new Point2D.Double(cx, cy);
+    }
+    // Kalau target gak reachable sama sekali (terkurung tembok tanpa celah),
+    // otomatis alihkan buat ngehancurin Wall terdekat yang beneran reachable dulu.
+    private void moveTowardTarget(double tx, double ty, List<Building> allBuildings) {
+        if (hasClearLine(x, y, tx, ty, allBuildings)) {
+            path = null;
+            double dx = tx - x, dy = ty - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 1) {
+                if (dx > 0.1) facingRight = true;
+                else if (dx < -0.1) facingRight = false;
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
+            }
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        boolean needRepath = path == null || path.isEmpty() || pathIndex >= path.size()
+                || now - lastChasePathTime > CHASE_REPATH_COOLDOWN;
+
+        if (needRepath) {
+            List<Point> newPath = PathFinder.findPath(x, y, tx, ty, allBuildings);
+
+            if (newPath.isEmpty() && allBuildings != null) {
+                Building nearestWall = findNearestReachableWall(allBuildings);
+                if (nearestWall != null) {
+                    forcedWallTarget = nearestWall;
+                    Point2D.Double np = nearestPointOnRect(nearestWall.getSolidHitbox(), x, y);
+                    newPath = PathFinder.findPath(x, y, np.x, np.y, allBuildings);
+                }
+            } else {
+                forcedWallTarget = null;
+            }
+
+            path = newPath;
+            pathIndex = 0;
+            lastChasePathTime = now;
+        }
+
+        if (path != null && pathIndex < path.size()) {
+            Point node = path.get(pathIndex);
+            double nx = node.x - size / 2.0;
+            double ny = node.y - size / 2.0;
+            double dx = nx - x, dy = ny - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 12.0) {
+                if (dx > 0.1) facingRight = true;
+                else if (dx < -0.1) facingRight = false;
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
+            } else {
+                pathIndex++;
+            }
+        }
+    }
+    private boolean hasClearLine(double x1, double y1, double x2, double y2, java.util.List<Building> buildings) {
+        if (buildings == null) return true;
+        double dx = x2 - x1, dy = y2 - y1;
+        double dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1) return true;
+
+        int steps = (int) (dist / 15) + 1; // Cek tiap ~15 unit sepanjang garis
+        for (int i = 0; i <= steps; i++) {
+            double t = (double) i / steps;
+            double px = x1 + dx * t;
+            double py = y1 + dy * t;
+            for (Building b : buildings) {
+                if (b.getSolidHitbox().contains(px, py)) return false;
+            }
+        }
+        return true;
+    }
+
+    // --- FITUR BARU: Cari Wall terdekat yang beneran bisa dijangkau (path-nya gak kosong) ---
+    private Building findNearestReachableWall(List<Building> allBuildings) {
+        Building nearest = null;
+        double bestDist = Double.MAX_VALUE;
+        for (Building b : allBuildings) {
+            if (!b.isBuilt || b.currentHp <= 0) continue;
+            if (b.type != Building.BuildingType.WALL_L
+                    && b.type != Building.BuildingType.WALL_R
+                    && b.type != Building.BuildingType.WALL_UD) continue;
+
+            double d = distanceToRect(b.getSolidHitbox(), x, y);
+            if (d >= bestDist) continue;
+
+            List<Point> p = PathFinder.findPath(x, y,
+                    b.getSolidHitbox().getCenterX(), b.getSolidHitbox().getCenterY(), allBuildings);
+            if (!p.isEmpty()) {
+                bestDist = d;
+                nearest = b;
+            }
+        }
+        return nearest;
     }
 
     public void draw(Graphics2D g2d, BufferedImage img) {

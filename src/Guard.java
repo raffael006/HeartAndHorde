@@ -18,6 +18,69 @@ public class Guard implements Serializable {
         this.pathIndex = 0;
     }
 
+    // --- FITUR BARU: Jalan ngejar pakai PathFinder (bukan garis lurus), throttled biar gak berat ---
+    private void chaseTarget(double targetX, double targetY, java.util.List<Building> allBuildings) {
+        // Kalau garis lurus ke target masih bersih, jalan LANGSUNG - jauh lebih halus,
+        // PathFinder cuma dipanggil kalau garis lurusnya beneran keblok bangunan.
+        if (hasClearLine(x, y, targetX, targetY, allBuildings)) {
+            path = null; // Buang path lama, biar kalau ke-blok lagi nanti, mulai fresh
+            double dx = targetX - x;
+            double dy = targetY - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 1) {
+                if (dx > 0.1) facingRight = true;
+                else if (dx < -0.1) facingRight = false;
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
+            }
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (path == null || path.isEmpty() || pathIndex >= path.size()
+                || now - lastChasePathTime > CHASE_REPATH_COOLDOWN) {
+            path = PathFinder.findPath(x, y, targetX, targetY, allBuildings);
+            pathIndex = 0;
+            lastChasePathTime = now;
+        }
+
+        if (path != null && pathIndex < path.size()) {
+            Point node = path.get(pathIndex);
+            double nx = node.x - size / 2.0;
+            double ny = node.y - size / 2.0;
+            double dx = nx - x, dy = ny - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 12.0) {
+                if (dx > 0.1) facingRight = true;
+                else if (dx < -0.1) facingRight = false;
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
+            } else {
+                pathIndex++;
+            }
+        }
+    }
+
+    // --- FITUR BARU: Cek apakah garis lurus dari (x1,y1) ke (x2,y2) ketutup bangunan atau enggak ---
+    private boolean hasClearLine(double x1, double y1, double x2, double y2, java.util.List<Building> buildings) {
+        if (buildings == null) return true;
+        double dx = x2 - x1, dy = y2 - y1;
+        double dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1) return true;
+
+        int steps = (int) (dist / 15) + 1; // Cek tiap ~15 unit sepanjang garis
+        for (int i = 0; i <= steps; i++) {
+            double t = (double) i / steps;
+            double px = x1 + dx * t;
+            double py = y1 + dy * t;
+            for (Building b : buildings) {
+                if (b.getSolidHitbox().contains(px, py)) return false;
+            }
+        }
+        return true;
+    }
+
     // Atribut Identitas
     public GuardType type;
     public GuardState state;
@@ -40,6 +103,9 @@ public class Guard implements Serializable {
     public long attackCooldown = 1000;
     public double attackRange = size + 5;
     public double sightRange = 200;
+    // --- FITUR BARU: Throttle buat PathFinder pas ngejar musuh ---
+    private long lastChasePathTime = 0;
+    private static final long CHASE_REPATH_COOLDOWN = 600; // ms
 
     public Guard(GuardType type, double startX, double startY) {
         this.type = type;
@@ -62,7 +128,7 @@ public class Guard implements Serializable {
         this.currentHp = this.maxHp;
     }
 
-    public void update(java.util.List<Guard> allGuards, java.util.List<Horde> allHordes, java.util.List<Projectile> allProjectiles) {
+    public void update(java.util.List<Guard> allGuards, java.util.List<Horde> allHordes, java.util.List<Projectile> allProjectiles, java.util.List<Building> allBuildings) {
 
         // --- 1. Logika Berjalan Penerapan GRAPH ---
         if (state == GuardState.MOVING) {
@@ -139,14 +205,9 @@ public class Guard implements Serializable {
                         lastAttackTime = currentTime;
                     }
                 } else if (state != GuardState.MOVING) {
-                    double dx = targetEnemy.x - this.x;
-                    double dy = targetEnemy.y - this.y;
-                    // --- FITUR BARU: Update arah hadap sesuai arah kejar musuh ---
-                    if (dx > 0.1) facingRight = true;
-                    else if (dx < -0.1) facingRight = false;
-
-                    this.x += (dx / minDistance) * speed;
-                    this.y += (dy / minDistance) * speed;
+                    if (targetEnemy.x > this.x + 0.1) facingRight = true;
+                    else if (targetEnemy.x < this.x - 0.1) facingRight = false;
+                    chaseTarget(targetEnemy.x, targetEnemy.y, allBuildings);
                 }
             }
 
@@ -176,14 +237,9 @@ public class Guard implements Serializable {
                         lastAttackTime = currentTime;
                     }
                 } else if (state != GuardState.MOVING) {
-                    double dx = targetEnemyMelee.x - this.x;
-                    double dy = targetEnemyMelee.y - this.y;
-                    // --- FITUR BARU: Update arah hadap sesuai arah kejar musuh ---
-                    if (dx > 0.1) facingRight = true;
-                    else if (dx < -0.1) facingRight = false;
-
-                    this.x += (dx / minDistanceMelee) * speed;
-                    this.y += (dy / minDistanceMelee) * speed;
+                    if (targetEnemyMelee.x > this.x + 0.1) facingRight = true;
+                    else if (targetEnemyMelee.x < this.x - 0.1) facingRight = false;
+                    chaseTarget(targetEnemyMelee.x, targetEnemyMelee.y, allBuildings);
                 }
             }
         }
