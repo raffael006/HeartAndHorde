@@ -8,7 +8,7 @@ public class Horde implements Serializable {
 
     // Enum (Sistem Status & Tipe)
     // AXEMAN = 1Horde, SHIELDBEARER = 2Horde, BOWMAN = 3Horde
-    public enum HordeType { AXEMAN, SHIELDBEARER, BOWMAN }
+    public enum HordeType { AXEMAN, SHIELDBEARER, BOWMAN, BEAR, TWO_AXE, LOG, SORCERER }
     public enum HordeState { IDLE, MOVING, ATTACKING }
 
     // Atribut Identitas
@@ -48,30 +48,97 @@ public class Horde implements Serializable {
         this.y = startY - (size / 2.0);
         this.state = HordeState.IDLE;
 
-        // Penentuan Status berdasarkan Tipe Horde
+        applyStatsForType();
+
+        // Darah penuh saat pertama kali spawn
+        this.currentHp = this.maxHp;
+    }
+
+    // --- FITUR BARU: dipisah dari constructor supaya bisa dipanggil ulang pas Bear "ganti wujud" ---
+    private void applyStatsForType() {
         if (this.type == HordeType.AXEMAN) {
             this.maxHp = 80;
             this.attackDamage = 10;
             this.speed = 0.8;
+            this.attackCooldown = 1200;
         } else if (this.type == HordeType.SHIELDBEARER) {
             this.maxHp = 150; // Darah paling tebal (Tank)
             this.attackDamage = 5;
             this.speed = 0.7; // Paling lambat
+            this.attackCooldown = 1200;
         } else if (this.type == HordeType.BOWMAN) {
             this.maxHp = 50;  // Darah tipis
             this.attackDamage = 15;
             this.speed = 1;
+            this.attackCooldown = 1200;
+        } else if (this.type == HordeType.BEAR) {
+            this.maxHp = 90;
+            this.attackDamage = 10;
+            this.speed = 1.15; // Dikit lebih cepet dari Bowman
+            this.attackCooldown = 1200;
+        } else if (this.type == HordeType.TWO_AXE) {
+            this.maxHp = 80;
+            this.attackDamage = 10;
+            this.speed = 0.8;
+            this.attackCooldown = 700; // Lebih barbar -> mukul lebih sering
+        } else if (this.type == HordeType.LOG) {
+            this.maxHp = 300; // Darah tebal banget
+            this.attackDamage = 8;   // Ke Guard/Civil normal aja
+            this.speed = 0.4;        // Lambat banget
+            this.attackCooldown = 1800; // Ayunan berat, lama
+        } else if (this.type == HordeType.SORCERER) {
+            this.maxHp = 35; // Tipis, support unit
+            this.attackDamage = 0; // Gak nyerang langsung
+            this.speed = 0.6;
+            this.attackCooldown = 9999;
         }
+    }
 
-        // Darah penuh saat pertama kali spawn
-        this.currentHp = this.maxHp;
+    // --- FITUR BARU: dipanggil GamePanel pas ngecek horde mati. Bear khusus "ganti wujud", bukan mati beneran. ---
+    public boolean isDead() {
+        if (currentHp > 0) return false;
+        if (type == HordeType.BEAR) {
+            type = HordeType.AXEMAN;
+            applyStatsForType();
+            currentHp = maxHp;
+            return false; // Belum mati, cuma ganti wujud
+        }
+        return true;
+    }
+
+    // --- FITUR BARU: Multiplier damage kalau lagi di dalam aura Sorcerer terdekat ---
+    private static final double SORCERER_AURA_RADIUS = 150.0;
+    private static final double SORCERER_DAMAGE_MULTIPLIER = 1.5;
+    private static final double SORCERER_HEAL_PER_TICK = 0.5;
+    private static final double LOG_BUILDING_DAMAGE_MULTIPLIER = 5.0;
+    private static final double FACING_DEADZONE = 8.0;
+
+    private boolean isNearSorcerer(List<Horde> allHordes) {
+        if (type == HordeType.SORCERER) return false; // Sorcerer gak nge-buff diri sendiri
+        for (Horde h : allHordes) {
+            if (h.type != HordeType.SORCERER || h == this) continue;
+            double dx = h.x - x, dy = h.y - y;
+            if (Math.sqrt(dx * dx + dy * dy) <= SORCERER_AURA_RADIUS) return true;
+        }
+        return false;
     }
 
     // Fungsi update menerima tambahan daftar Proyektil (GameWindow.activeProjectiles)
     // --- FITUR BARU: Tambahan parameter allCivils & allBuildings, biar Horde bisa niatin warga sipil & bangunan juga ---
     public void update(List<Horde> allHordes, List<Guard> allGuards, java.util.List<Projectile> allProjectiles, List<Civil> allCivils, List<Building> allBuildings) {
 
+        // --- FITUR BARU: Sorcerer punya alur sendiri, gak ikut sistem targeting Guard/Building/Civil biasa ---
+        if (type == HordeType.SORCERER) {
+            updateSorcerer(allHordes, allBuildings);
+            return;
+        }
+
         long currentTime = System.currentTimeMillis();
+
+        // --- FITUR BARU: Buff dari aura Sorcerer (ilang kalau keluar radius) ---
+        boolean buffed = isNearSorcerer(allHordes);
+        if (buffed) currentHp = Math.min(maxHp, currentHp + SORCERER_HEAL_PER_TICK);
+        double effectiveDamage = attackDamage * (buffed ? SORCERER_DAMAGE_MULTIPLIER : 1.0);
 
         // Cari Guard terdekat untuk disamperin
         Guard targetGuard = null;
@@ -203,18 +270,18 @@ public class Horde implements Serializable {
                 if (minTargetDistance <= attackRangePanahMusuh) {
                     // Masuk jarak tembak: Berhenti dan Tembak (Cek cooldown)
                     // --- FITUR BARU: Saat menembak, tetap hadap ke arah target ---
-                    if (targetX > this.x + 0.1) facingRight = true;
-                    else if (targetX < this.x - 0.1) facingRight = false;
+                    if (targetX > this.x + FACING_DEADZONE) facingRight = true;
+                    else if (targetX < this.x - FACING_DEADZONE) facingRight = false;
 
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         if (attackingBuilding) {
                             // --- FITUR BARU: Panah ke Building damage langsung ---
                             // (sistem collision Projectile yang ada cuma ngecek nabrak Horde/Guard, belum Building,
                             // jadi biar Bowman tetap bisa "menembak" bangunan, damage-nya langsung dikenakan)
-                            targetBuilding.currentHp -= this.attackDamage;
+                            targetBuilding.currentHp -= effectiveDamage;
                         } else {
                             // BUAT PROYEKTIL BARU (false = dari horde, damage 15)
-                            allProjectiles.add(new Projectile(x, y, targetX, targetY, false, attackDamage));
+                            allProjectiles.add(new Projectile(x, y, targetX, targetY, false, effectiveDamage));
                         }
                         lastAttackTime = currentTime;
                     }
@@ -228,16 +295,17 @@ public class Horde implements Serializable {
                 double attackRangeMeleeMusuh = size + 5;
                 if (minTargetDistance <= attackRangeMeleeMusuh) {
                     // --- FITUR BARU: Saat memukul, tetap hadap ke arah target ---
-                    if (targetX > this.x + 0.1) facingRight = true;
-                    else if (targetX < this.x - 0.1) facingRight = false;
+                    if (targetX > this.x + FACING_DEADZONE) facingRight = true;
+                    else if (targetX < this.x - FACING_DEADZONE) facingRight = false;
 
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         if (attackingCivil) {
-                            targetCivil.currentHp -= this.attackDamage;
+                            targetCivil.currentHp -= effectiveDamage;
                         } else if (attackingBuilding) {
-                            targetBuilding.currentHp -= this.attackDamage;
+                            double dmg = effectiveDamage * (type == HordeType.LOG ? LOG_BUILDING_DAMAGE_MULTIPLIER : 1.0);
+                            targetBuilding.currentHp -= dmg;
                         } else {
-                            targetGuard.currentHp -= this.attackDamage;
+                            targetGuard.currentHp -= effectiveDamage;
                         }
                         lastAttackTime = currentTime;
                     }
@@ -278,6 +346,25 @@ public class Horde implements Serializable {
         }
     }
 
+
+    // --- FITUR BARU: Sorcerer cuma ngikutin rombongan horde terdekat, gak nyerang langsung ---
+    private void updateSorcerer(List<Horde> allHordes, List<Building> allBuildings) {
+        Horde nearestAlly = null;
+        double bestDist = Double.MAX_VALUE;
+        for (Horde h : allHordes) {
+            if (h == this || h.type == HordeType.SORCERER) continue;
+            double dx = h.x - x, dy = h.y - y;
+            double d = Math.sqrt(dx * dx + dy * dy);
+            if (d < bestDist) { bestDist = d; nearestAlly = h; }
+        }
+
+        if (nearestAlly != null && bestDist > SORCERER_AURA_RADIUS * 0.6) {
+            // Terlalu jauh dari rombongan -> samperin dikit biar tetep dalem jangkauan buff
+            moveTowardTarget(nearestAlly.x, nearestAlly.y, allBuildings);
+        }
+        // Kalau udah cukup deket rombongan, diem aja di situ (gak perlu ngapa-ngapain lagi)
+    }
+
     // --- FITUR BARU: Helper hitung jarak dari titik (Horde) ke sisi terdekat rectangle Building ---
     // Dipakai supaya jangkauan serang/deteksi Building tetap akurat walau bangunannya gede,
     // (bukan ngukur ke titik tengah bangunan, yang bisa nyangkut jauh di dalam hitbox solid).
@@ -301,8 +388,8 @@ public class Horde implements Serializable {
             double dx = tx - x, dy = ty - y;
             double dist = Math.sqrt(dx * dx + dy * dy);
             if (dist > 1) {
-                if (dx > 0.1) facingRight = true;
-                else if (dx < -0.1) facingRight = false;
+                if (dx > FACING_DEADZONE) facingRight = true;
+                else if (dx < -FACING_DEADZONE) facingRight = false;
                 x += (dx / dist) * speed;
                 y += (dy / dist) * speed;
             }
@@ -339,9 +426,13 @@ public class Horde implements Serializable {
             double dx = nx - x, dy = ny - y;
             double dist = Math.sqrt(dx * dx + dy * dy);
 
+            // Arah gerak tetap ikut node path (biar bisa belok ngindarin tembok),
+            // tapi arah HADAP dihitung dari target asli biar gak kedip2 tiap path nangga.
+            double facingDx = tx - x;
+
             if (dist > 12.0) {
-                if (dx > 0.1) facingRight = true;
-                else if (dx < -0.1) facingRight = false;
+                if (facingDx > FACING_DEADZONE) facingRight = true;
+                else if (facingDx < -FACING_DEADZONE) facingRight = false;
                 x += (dx / dist) * speed;
                 y += (dy / dist) * speed;
             } else {
@@ -390,7 +481,42 @@ public class Horde implements Serializable {
         return nearest;
     }
 
+    // --- FITUR BARU: Ukuran VISUAL gambar per tipe (beda dari hitbox `size` yang tetap kotak) ---
+    public static int getVisualWidth(HordeType type) {
+        if (type == HordeType.BEAR) return 38;   // Sesuaikan sama rasio Bear_Horde.png asli
+        if (type == HordeType.LOG) return 58;    // Sesuaikan sama rasio Log_horde.png asli
+        if (type == HordeType.SORCERER) return 20;
+        if (type == HordeType.TWO_AXE) return 20;
+        return 20; // Default (Axeman/Shieldbearer/Bowman) tetap 20x20 kayak sebelumnya
+    }
+
+    public static int getVisualHeight(HordeType type) {
+        if (type == HordeType.BEAR) return 34;
+        if (type == HordeType.LOG) return 25;    // Log kelihatannya "banner" lebar-pendek dari gambarnya
+        if (type == HordeType.SORCERER) return 35;
+        if (type == HordeType.TWO_AXE) return 20;
+        return 20;
+    }
+
     public void draw(Graphics2D g2d, BufferedImage img) {
+
+        // --- FITUR BARU: Lingkaran radius buff Sorcerer (dipipihin biar sesuai perspektif 2.5D) ---
+        if (type == HordeType.SORCERER) {
+            int auraW = (int) (SORCERER_AURA_RADIUS * 2);
+            int auraH = (int) (SORCERER_AURA_RADIUS * 2 * 0.5); // Rasio 1:2, sama kayak oval bayangan unit lain
+
+            int cx = (int) (x + size / 2.0);
+            int cy = (int) (y + size); // Nempel ke kaki/dasar sprite, bukan tengah body
+
+            int auraX = cx - auraW / 2;
+            int auraY = cy - auraH / 2;
+
+            g2d.setColor(new Color(200, 0, 0, 40));
+            g2d.fillOval(auraX, auraY, auraW, auraH);
+            g2d.setColor(new Color(200, 0, 0, 120));
+            g2d.setStroke(new BasicStroke(1.5f));
+            g2d.drawOval(auraX, auraY, auraW, auraH);
+        }
 
         // --- LAYER 1: AURA MERAH (Pengganti lingkaran seleksi) ---
         g2d.setColor(new Color(200, 0, 0, 100)); // Merah transparan
@@ -402,17 +528,22 @@ public class Horde implements Serializable {
 
         // --- LAYER 2: GAMBAR HORDE ---
         if (img != null) {
+            int vw = getVisualWidth(type);
+            int vh = getVisualHeight(type);
+            // Gambar dipusatkan (center) di atas titik hitbox, biar gambar yang lebih
+            // besar/kecil dari hitbox tetap "nempel" pas di tengah, bukan geser ke pojok.
+            int drawX = (int) x + (size - vw) / 2;
+            int drawY = (int) y + (size - vh) / 2;
+
             // --- FITUR BARU: Flip gambar horizontal kalau lagi menghadap kanan ---
-            // (Sprite asli Horde defaultnya menghadap KIRI, kebalikan dari Guard)
             if (facingRight) {
                 java.awt.geom.AffineTransform oldTransform = g2d.getTransform();
-                g2d.translate((int) x + size, (int) y);
+                g2d.translate(drawX + vw, drawY);
                 g2d.scale(-1, 1);
-                g2d.drawImage(img, 0, 0, size, size, null);
+                g2d.drawImage(img, 0, 0, vw, vh, null);
                 g2d.setTransform(oldTransform);
             } else {
-                // Gambar langsung mengikuti ukuran hitbox (size x size) agar proporsinya sama dengan Guard
-                g2d.drawImage(img, (int)x, (int)y, size, size, null);
+                g2d.drawImage(img, drawX, drawY, vw, vh, null);
             }
         } else {
             g2d.setColor(Color.RED);

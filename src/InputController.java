@@ -92,6 +92,34 @@ public class InputController {
             }
         });
 
+        gp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_0, 0), "spawnBear");
+        gp.getActionMap().put("spawnBear", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (gp.isCheatModeActive) { gp.window.activeHordes.add(new Horde(Horde.HordeType.BEAR, gp.mouseX, gp.mouseY)); gp.repaint(); }
+            }
+        });
+
+        gp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, 0), "spawnTwoAxe");
+        gp.getActionMap().put("spawnTwoAxe", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (gp.isCheatModeActive) { gp.window.activeHordes.add(new Horde(Horde.HordeType.TWO_AXE, gp.mouseX, gp.mouseY)); gp.repaint(); }
+            }
+        });
+
+        gp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, 0), "spawnLog");
+        gp.getActionMap().put("spawnLog", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (gp.isCheatModeActive) { gp.window.activeHordes.add(new Horde(Horde.HordeType.LOG, gp.mouseX, gp.mouseY)); gp.repaint(); }
+            }
+        });
+
+        gp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_OPEN_BRACKET, 0), "spawnSorcerer");
+        gp.getActionMap().put("spawnSorcerer", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (gp.isCheatModeActive) { gp.window.activeHordes.add(new Horde(Horde.HordeType.SORCERER, gp.mouseX, gp.mouseY)); gp.repaint(); }
+            }
+        });
+
         // --- CHEAT SPAWN CIVIL (Tekan P) ---
         gp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_P, 0), "spawnCivil");
         gp.getActionMap().put("spawnCivil", new AbstractAction() {

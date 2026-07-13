@@ -20,6 +20,7 @@ public class GamePanel extends JPanel {
     private BufferedImage axemanImg;
     private BufferedImage shieldImg;
     private BufferedImage bowmanHordeImg;
+    private BufferedImage bearImg, twoAxeImg, logHordeImg, sorcererImg;
     private BufferedImage civilImg;
     private BufferedImage wallLeftImg;
     private BufferedImage wallRightImg;
@@ -246,6 +247,10 @@ public class GamePanel extends JPanel {
             axemanImg = ImageIO.read(new File("assets/img/1Horde.png"));
             shieldImg = ImageIO.read(new File("assets/img/2Horde.png"));
             bowmanHordeImg = ImageIO.read(new File("assets/img/3Horde.png"));
+            bearImg = ImageIO.read(new File("assets/img/Bear_Horde.png"));
+            twoAxeImg = ImageIO.read(new File("assets/img/Horde_2axe.png"));
+            logHordeImg = ImageIO.read(new File("assets/img/Log_horde.png"));
+            sorcererImg = ImageIO.read(new File("assets/img/sorcerer_Horde.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Pasukan Horde!");
         }
@@ -412,7 +417,7 @@ public class GamePanel extends JPanel {
 
             // 4. Bersihkan data (Mayat & Panah non-aktif)
             window.activeGuards.removeIf(g -> g.currentHp <= 0);
-            window.activeHordes.removeIf(h -> h.currentHp <= 0);
+            window.activeHordes.removeIf(Horde::isDead);
             window.activeCivils.removeIf(c -> c.currentHp <= 0); // --- FITUR BARU: Civil yang HP-nya habis dihapus juga
 
             // --- LOGIKA PROGRESS TEBANG POHON ---
@@ -1061,6 +1066,10 @@ public class GamePanel extends JPanel {
             if (h.type == Horde.HordeType.AXEMAN) imgToUse = axemanImg;
             else if (h.type == Horde.HordeType.SHIELDBEARER) imgToUse = shieldImg;
             else if (h.type == Horde.HordeType.BOWMAN) imgToUse = bowmanHordeImg;
+            else if (h.type == Horde.HordeType.BEAR) imgToUse = bearImg;
+            else if (h.type == Horde.HordeType.TWO_AXE) imgToUse = twoAxeImg;
+            else if (h.type == Horde.HordeType.LOG) imgToUse = logHordeImg;
+            else if (h.type == Horde.HordeType.SORCERER) imgToUse = sorcererImg;
 
             final BufferedImage finalImg = imgToUse;
 

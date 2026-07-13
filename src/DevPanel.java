@@ -69,14 +69,14 @@ public class DevPanel extends JPanel {
         g2d.drawString("RESOURCES", 18, 68);
         g2d.drawString("GUARDS", 18, 168);
         g2d.drawString("HORDES", 18, 268);
-        g2d.drawString("WORLD", 18, 368);
+        g2d.drawString("WORLD", 18, 405);
 
         // Garis tipis tiap section
         g2d.setColor(new Color(60, 48, 30));
         g2d.drawLine(90, 62, w - 16, 62);
         g2d.drawLine(72, 162, w - 16, 162);
         g2d.drawLine(70, 262, w - 16, 262);
-        g2d.drawLine(62, 362, w - 16, 362);
+        g2d.drawLine(62, 362, w - 16, 399);
 
         // --- Live stats ---
         g2d.setFont(new Font("Serif", Font.PLAIN, 11));
@@ -173,20 +173,29 @@ public class DevPanel extends JPanel {
         spawnBow1   .setBounds(col3, 276, bw, bh);
         spawnAll3   .setBounds(col4, 276, bw, bh);
 
+        JButton spawnBear1     = mkBtn.apply("+1 Bear",     () -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.BEAR, p[0], p[1])); });
+        JButton spawnTwoAxe1   = mkBtn.apply("+1 2Axe",     () -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.TWO_AXE, p[0], p[1])); });
+        JButton spawnLog1      = mkBtn.apply("+1 Log",      () -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.LOG, p[0], p[1])); });
+        JButton spawnSorcerer1 = mkBtn.apply("+1 Sorcerer", () -> { double[] p = spawnPos.get(); window.activeHordes.add(new Horde(Horde.HordeType.SORCERER, p[0], p[1])); });
+        spawnBear1    .setBounds(col1, 313, bw, bh);
+        spawnTwoAxe1  .setBounds(col2, 313, bw, bh);
+        spawnLog1     .setBounds(col3, 313, bw, bh);
+        spawnSorcerer1.setBounds(col4, 313, bw, bh);
+
         JButton killAllHorde = mkBtn.apply("Kill All Hordes", () -> window.activeHordes.clear());
         JButton spawnHorde20 = mkBtn.apply("+20 Axemen",     () -> { double[] p = spawnPos.get(); for (int i = 0; i < 20; i++) window.activeHordes.add(new Horde(Horde.HordeType.AXEMAN, p[0] + (i % 5) * 30, p[1] + (i / 5) * 30)); });
-        killAllHorde.setBounds(col1, 313, bw, bh);
-        spawnHorde20.setBounds(col2, 313, bw, bh);
+        killAllHorde.setBounds(col1, 350, bw, bh);
+        spawnHorde20.setBounds(col2, 350, bw, bh);
 
         // ===== SECTION: WORLD =====
         JButton clearBuildings = mkBtn.apply("Clear Buildings", () -> { window.savedBuildings.clear(); });
         JButton clearProj      = mkBtn.apply("Clear Projectiles", () -> window.activeProjectiles.clear());
         JButton clearAll       = mkBtn.apply("Clear Everything", () -> { window.activeGuards.clear(); window.activeHordes.clear(); window.activeProjectiles.clear(); });
         JButton centerCam      = mkBtn.apply("Center Camera", () -> { camera.centerOn(1500, 1500, hostWidth.getAsInt(), hostHeight.getAsInt()); repaint(); });
-        clearBuildings.setBounds(col1, 376, bw, bh);
-        clearProj     .setBounds(col2, 376, bw, bh);
-        clearAll      .setBounds(col3, 376, bw, bh);
-        centerCam     .setBounds(col4, 376, bw, bh);
+        clearBuildings.setBounds(col1, 413, bw, bh);
+        clearProj     .setBounds(col2, 413, bw, bh);
+        clearAll      .setBounds(col3, 413, bw, bh);
+        centerCam     .setBounds(col4, 413, bw, bh);
 
         // ===== CLOSE BUTTON =====
         JButton closeBtn = new JButton("✕") {
