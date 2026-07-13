@@ -285,7 +285,14 @@ public class MenuPanel extends JPanel {
                 fadeAlpha = 0.0f;
                 menuBox.setVisible(true);
 
+                // --- FIX: reset SEMUA overlay, bukan cuma loadBox, biar gak numpuk
+                // pas balik lagi ke MENU_SCREEN. Sebelumnya difficultyBox (dan optionsBox)
+                // gak pernah di-set false di sini, jadi kalau alurnya lewat CAMPAIGN ->
+                // pilih difficulty -> fade ke GAME_SCREEN -> nanti "Back to Main Menu",
+                // difficultyBox masih nyala bareng menuBox (menumpuk).
                 loadBox.setVisible(false);
+                difficultyBox.setVisible(false);
+                optionsBox.setVisible(false);
                 isOverlayOpen = false;
             }
             repaint();

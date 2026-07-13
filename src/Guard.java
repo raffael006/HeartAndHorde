@@ -195,7 +195,14 @@ public class Guard implements Serializable {
 
             if (targetEnemy != null) {
                 if (minDistance <= attackRangePanah) {
-                    if (state == GuardState.MOVING) return;
+                    // --- FIX: begitu masuk jarak tembak, LANGSUNG berhenti di tempat &
+                    // mulai nembak dari situ -- gak perlu nunggu sampai titik tujuan klik
+                    // dulu. State diubah dari MOVING jadi DEFENDING supaya bagian
+                    // "1. Logika Berjalan" di atas otomatis berhenti gerakin guard
+                    // di tick berikutnya, dan path lama (tujuan klik) dibuang.
+                    state = GuardState.DEFENDING;
+                    path = null;
+
                     // --- FITUR BARU: Saat menembak, tetap hadap ke arah musuh ---
                     if (targetEnemy.x > this.x + 0.1) facingRight = true;
                     else if (targetEnemy.x < this.x - 0.1) facingRight = false;
@@ -228,6 +235,12 @@ public class Guard implements Serializable {
 
             if (targetEnemyMelee != null) {
                 if (minDistanceMelee <= attackRangeMelee) {
+                    // --- FIX: sama seperti Archer -- begitu masuk jarak pukul, berhenti
+                    // di tempat (bukan lagi MOVING) baru menyerang, gak nyerobot nyerang
+                    // sambil tetap "dianggap" jalan menuju titik klik.
+                    state = GuardState.DEFENDING;
+                    path = null;
+
                     // --- FITUR BARU: Saat memukul, tetap hadap ke arah musuh ---
                     if (targetEnemyMelee.x > this.x + 0.1) facingRight = true;
                     else if (targetEnemyMelee.x < this.x - 0.1) facingRight = false;
