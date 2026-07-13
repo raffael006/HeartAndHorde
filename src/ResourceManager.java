@@ -15,14 +15,14 @@ public class ResourceManager {
     public int steel = 0;
 
     // --- FITUR BARU: KAPASITAS MAKSIMAL RESOURCE (buat bar 0/100 di HUD) ---
-    public int maxWood = 15;
+    public int maxWood = 20;
     public int maxStone = 15;
     public int maxSteel = 15;
     public int maxFood = 15;
     public int maxCivil = 100;
     public int maxGuard = 100;
 
-    private static final int BASE_CAPACITY = 15;
+    private static final int BASE_CAPACITY = 20;
     private static final int CAPACITY_PER_STORAGE = 25;
     private static final int MORNING_YIELD_PER_BUILDING = 5;
 

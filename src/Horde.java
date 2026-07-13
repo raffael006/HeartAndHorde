@@ -52,7 +52,7 @@ public class Horde implements Serializable {
         if (this.type == HordeType.AXEMAN) {
             this.maxHp = 80;
             this.attackDamage = 10;
-            this.speed = 1.0;
+            this.speed = 0.8;
         } else if (this.type == HordeType.SHIELDBEARER) {
             this.maxHp = 150; // Darah paling tebal (Tank)
             this.attackDamage = 5;
@@ -60,7 +60,7 @@ public class Horde implements Serializable {
         } else if (this.type == HordeType.BOWMAN) {
             this.maxHp = 50;  // Darah tipis
             this.attackDamage = 15;
-            this.speed = 1.5;
+            this.speed = 1;
         }
 
         // Darah penuh saat pertama kali spawn
