@@ -180,7 +180,7 @@ public class InputController {
                 // Klik Kanan (Batal / Perintah Jalan)
                 if (SwingUtilities.isRightMouseButton(e)) {
                     // Jika di mode Command, klik kanan berarti menyuruh Guard jalan
-                    if (gp.currentTool == GamePanel.ToolMode.COMMAND) {
+                    if (gp.currentTool == GamePanel.ToolMode.COMMAND || gp.currentTool == GamePanel.ToolMode.DEFENSE) {
                         Point worldPos = gp.camera.toWorld(e.getX(), e.getY());
 
                         int selectedCount = 0;
@@ -222,6 +222,14 @@ public class InputController {
                                     g.targetY = finalTargetY;
                                     g.state = Guard.GuardState.MOVING;
 
+                                    if (gp.currentTool == GamePanel.ToolMode.DEFENSE) {
+                                        g.holdPosition = true;
+                                        g.holdX = finalTargetX;
+                                        g.holdY = finalTargetY;
+                                    } else {
+                                        g.holdPosition = false; // dikasih order jalan biasa -> lepas dari mode jaga
+                                    }
+
                                     col++;
                                     if (col >= cols) {
                                         col = 0; row++;
@@ -240,7 +248,7 @@ public class InputController {
                     return;
                 }
 
-                if (gp.currentTool == GamePanel.ToolMode.COMMAND) {
+                if (gp.currentTool == GamePanel.ToolMode.COMMAND || gp.currentTool == GamePanel.ToolMode.DEFENSE){
                     gp.dragStartScreen = e.getPoint();
                     gp.dragEndScreen = e.getPoint();
                     gp.isDragging = true;
@@ -405,13 +413,20 @@ public class InputController {
                         Rectangle worldSelectRect = new Rectangle(wx, wy, wWidth, wHeight);
 
                         // Cek Guard mana yang masuk jaring blok kita
+                        boolean anySelected = false;
                         for (Guard g : gp.window.activeGuards) {
                             Rectangle guardRect = new Rectangle((int)g.x, (int)g.y, g.size, g.size);
                             if (worldSelectRect.intersects(guardRect) || worldSelectRect.contains(guardRect)) {
                                 g.isSelected = true;
+                                anySelected = true;
                             } else {
                                 g.isSelected = false; // Batal terpilih jika di luar kotak
                             }
+                        }
+
+                        // FITUR BARU: klik/drag kosong (gak kena unit) = cancel, matiin mode attack juga
+                        if (!anySelected) {
+                            gp.currentTool = GamePanel.ToolMode.NONE;
                         }
                     }
                     gp.repaint();

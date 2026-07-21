@@ -45,7 +45,7 @@ public class GamePanel extends JPanel {
     boolean wPressed = false, sPressed = false, aPressed = false, dPressed = false;
 
     // --- Variabel Alat & Bangunan ---
-    enum ToolMode { NONE, BUILD, MOVE, DELETE, COMMAND, CHOP_WOOD }
+    enum ToolMode { NONE, BUILD, MOVE, DELETE, COMMAND, CHOP_WOOD, DEFENSE }
     ToolMode currentTool = ToolMode.NONE;
     int mouseX = -100, mouseY = -100;
     Point dragStartScreen = null;
@@ -793,13 +793,20 @@ public class GamePanel extends JPanel {
         removeBtn.addActionListener(e -> { currentTool = ToolMode.DELETE; holdingBuilding = null; repaint(); });
         bottomLeftBar.add(removeBtn);
 
-        JButton defBtn = createColorButton(new Color(100, 100, 120), ToolMode.NONE, "🛡️");
+        JButton defBtn = createColorButton(new Color(100, 100, 120), ToolMode.DEFENSE, "🛡️");
         defBtn.setBounds(startX2, subSize + gap, subSize, subSize);
+        defBtn.addActionListener(e -> {
+            currentTool = (currentTool == ToolMode.DEFENSE) ? ToolMode.NONE : ToolMode.DEFENSE;
+            repaint();
+        });
         bottomLeftBar.add(defBtn);
 
         JButton atkBtn = createColorButton(new Color(150, 50, 50), ToolMode.COMMAND, "⚔️");
         atkBtn.setBounds(startX2 + subSize + gap, subSize + gap, subSize, subSize);
-        atkBtn.addActionListener(e -> { currentTool = ToolMode.COMMAND; repaint(); });
+        atkBtn.addActionListener(e -> {
+            currentTool = (currentTool == ToolMode.COMMAND) ? ToolMode.NONE : ToolMode.COMMAND;
+            repaint();
+        });
         bottomLeftBar.add(atkBtn);
 
         gridMenuPanel = new JPanel(new GridLayout(3, 4, 3, 3)) {

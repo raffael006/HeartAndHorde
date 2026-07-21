@@ -18,6 +18,24 @@ public class Guard implements Serializable {
         this.pathIndex = 0;
     }
 
+    // --- FITUR BARU: kalau lagi hold position dan gak ada musuh valid, balik ke titik jaga ---
+    private void goHomeToPost(java.util.List<Building> allBuildings) {
+        if (state == GuardState.MOVING) return; // udah lagi jalan, jangan diinterupsi
+        double dxHome = holdX - x, dyHome = holdY - y;
+        double distHome = Math.sqrt(dxHome * dxHome + dyHome * dyHome);
+        if (distHome > 12.0) {
+            java.util.List<Point> pathHome = PathFinder.findPath(
+                    x + size / 2.0, y + size / 2.0,
+                    holdX + size / 2.0, holdY + size / 2.0,
+                    allBuildings
+            );
+            setPath(pathHome);
+            targetX = holdX;
+            targetY = holdY;
+            state = GuardState.MOVING;
+        }
+    }
+
     // --- FITUR BARU: Jalan ngejar pakai PathFinder (bukan garis lurus), throttled biar gak berat ---
     private void chaseTarget(double targetX, double targetY, java.util.List<Building> allBuildings) {
         // Kalau garis lurus ke target masih bersih, jalan LANGSUNG - jauh lebih halus,
@@ -103,6 +121,9 @@ public class Guard implements Serializable {
     public long attackCooldown = 1000;
     public double attackRange = size + 5;
     public double sightRange = 200;
+    public boolean holdPosition = false;
+    public double holdX, holdY;
+    private static final double HOLD_LEASH_RADIUS = 260.0; // dikit lebih gede dari attackRangePanah biar gak ke-cut pas nembak di ujung
     // --- FITUR BARU: Throttle buat PathFinder pas ngejar musuh ---
     private long lastChasePathTime = 0;
     private static final long CHASE_REPATH_COOLDOWN = 600; // ms
@@ -193,6 +214,15 @@ public class Guard implements Serializable {
                 }
             }
 
+            // FITUR BARU: kalau lagi hold position, musuh di luar radius jaga jangan dikejar
+            if (targetEnemy != null && holdPosition) {
+                double dxHold = targetEnemy.x - holdX;
+                double dyHold = targetEnemy.y - holdY;
+                if (Math.sqrt(dxHold * dxHold + dyHold * dyHold) > HOLD_LEASH_RADIUS) {
+                    targetEnemy = null;
+                }
+            }
+
             if (targetEnemy != null) {
                 if (minDistance <= attackRangePanah) {
                     // --- FIX: begitu masuk jarak tembak, LANGSUNG berhenti di tempat &
@@ -216,6 +246,8 @@ public class Guard implements Serializable {
                     else if (targetEnemy.x < this.x - 0.1) facingRight = false;
                     chaseTarget(targetEnemy.x, targetEnemy.y, allBuildings);
                 }
+            } else if (holdPosition) {
+                goHomeToPost(allBuildings);
             }
 
         } else if (type == GuardType.SPEARMAN) {
@@ -230,6 +262,15 @@ public class Guard implements Serializable {
                 if (distanceMelee < minDistanceMelee) {
                     minDistanceMelee = distanceMelee;
                     targetEnemyMelee = enemy;
+                }
+            }
+
+            // FITUR BARU: kalau lagi hold position, musuh di luar radius jaga jangan dikejar
+            if (targetEnemyMelee != null && holdPosition) {
+                double dxHold = targetEnemyMelee.x - holdX;
+                double dyHold = targetEnemyMelee.y - holdY;
+                if (Math.sqrt(dxHold * dxHold + dyHold * dyHold) > HOLD_LEASH_RADIUS) {
+                    targetEnemyMelee = null;
                 }
             }
 
@@ -254,6 +295,8 @@ public class Guard implements Serializable {
                     else if (targetEnemyMelee.x < this.x - 0.1) facingRight = false;
                     chaseTarget(targetEnemyMelee.x, targetEnemyMelee.y, allBuildings);
                 }
+            } else if (holdPosition) {
+                goHomeToPost(allBuildings);
             }
         }
 

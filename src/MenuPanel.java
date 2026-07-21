@@ -401,12 +401,12 @@ public class MenuPanel extends JPanel {
                 g2d.setStroke(new BasicStroke(hover ? 2.2f : 1.4f));
                 g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
 
-                g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 22f));
+                g2d.setFont(new Font("SansSerif", Font.BOLD, 22));
                 FontMetrics fmT = g2d.getFontMetrics();
                 g2d.setColor(hover ? Color.WHITE : new Color(225, 220, 210));
                 g2d.drawString(label, (getWidth() - fmT.stringWidth(label)) / 2, 30);
 
-                g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.ITALIC, 13f));
+                g2d.setFont(new Font("SansSerif", Font.ITALIC, 13));
                 FontMetrics fmD = g2d.getFontMetrics();
                 g2d.setColor(new Color(190, 180, 165));
                 g2d.drawString(desc, (getWidth() - fmD.stringWidth(desc)) / 2, 52);
