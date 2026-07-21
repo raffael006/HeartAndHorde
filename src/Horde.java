@@ -40,6 +40,73 @@ public class Horde implements Serializable {
     private static final long CHASE_REPATH_COOLDOWN = 600; // ms, jangan itung ulang A* tiap frame
     private Building forcedWallTarget = null; // Diisi kalau lagi kejebak & harus mecahin tembok dulu
 
+    // --- FIX: BUG "GAK TAU MAU KEMANA" ---
+    // Sebelumnya target (Guard/Civil/Building) dicari ulang dari nol TIAP FRAME murni berdasarkan
+    // "siapa yang paling deket". Kalau ada 2 target yang jaraknya nyaris sama, hasil "paling deket"
+    // bisa gonta-ganti tiap frame gara-gara horde-nya sendiri gerak dikit -> targetX/targetY ikut
+    // lompat-lompat -> horde keliatan bingung/plin-plan gak jelas mau kemana.
+    // Solusinya: kunci ("lock") ke satu target & baru pindah kalau target itu mati/hilang,
+    // atau ada target lain yang JAUH LEBIH DEKET (bukan cuma dikit lebih deket).
+    private Guard lockedGuard = null;
+    private Civil lockedCivil = null;
+    private Building lockedBuilding = null;
+    private static final double TARGET_SWITCH_MARGIN = 40.0; // target baru harus lebih deket minimal segini buat ganti lock
+    private int lastChosenTier = 0; // 0=none, 1=Guard, 2=Building, 3=Civil -- buat histeresis prioritas tier
+
+    // --- FIX KEDUA: path jadi basi kalau target pindah ---
+    // Sebelumnya re-path (hitung ulang A*) cuma dipicu oleh cooldown waktu, TIDAK peduli apakah
+    // target yang dituju sudah berubah posisi/berganti. Akibatnya horde bisa tetap jalan menuju
+    // titik target yang LAMA sampai cooldown-nya habis, baru "sadar" & belok mendadak ke target baru.
+    private double lastMoveTargetX = Double.NaN;
+    private double lastMoveTargetY = Double.NaN;
+    private static final double TARGET_MOVE_REPATH_THRESHOLD = 30.0; // target geser lebih dari ini -> paksa repath
+
+    // --- FIX KEEMPAT: bug "maju-mundur" di kerumunan padat (banyak horde numpuk nyerbu 1 target) ---
+    // Sebelumnya status "di jarak serang" vs "harus maju" dicek pakai SATU angka jarak yang sama
+    // tiap frame. Pas horde lagi rame numpuk deket target, dorongan anti-tumpuk dari tetangga bisa
+    // ngegeser horde keluar dari radius serang dikit -> status jadi "harus maju" -> begitu maju
+    // dikit, nyenggol tetangga lagi -> kedorong keluar lagi -> loop maju-mundur. Sekarang dikasih
+    // "zona toleransi": begitu horde udah dianggap masuk jarak serang, dia baru dianggap "keluar
+    // jangkauan lagi" kalau kedorong cukup jauh (bukan cuma nyerempet dikit).
+    private boolean wasInAttackRange = false;
+    private static final double ATTACK_RANGE_HYSTERESIS = 15.0;
+
+    // --- FIX KEENAM: SISTEM ANTRIAN SLOT SERANG ---
+    // Daripada semua horde yang niatin target yang sama maksa deket-deket (yang bikin
+    // dorongan anti-tumpuk saling tarik-menarik terus di kerumunan padat), sekarang tiap
+    // target (Guard/Building/Civil) punya jatah "slot" terbatas buat horde yang boleh
+    // beneran nempel & nyerang. Horde yang gak kebagian slot cuma jalan sampe jarak aman
+    // di luar kerumunan terus DIAM nunggu giliran -- gak ikut dorong-dorongan masuk.
+    private Object reservedTarget = null;
+    private boolean hasEngagementSlot = false;
+    private static final int MAX_ENGAGERS_PER_TARGET = 6; // kira-kira muat segini di sekeliling 1 target
+    private static final double QUEUE_GAP = 45.0; // jarak "antri" di luar jarak serang normal
+    private static final java.util.Map<Object, java.util.Set<Horde>> engagementSlots = new java.util.HashMap<>();
+
+    private void updateEngagementSlot(Object currentTargetObj) {
+        if (currentTargetObj != reservedTarget) {
+            releaseEngagementSlot();
+            reservedTarget = currentTargetObj;
+        }
+        if (currentTargetObj == null) return;
+        if (!hasEngagementSlot) {
+            java.util.Set<Horde> slotSet = engagementSlots.computeIfAbsent(currentTargetObj, k -> new java.util.HashSet<>());
+            if (slotSet.size() < MAX_ENGAGERS_PER_TARGET) {
+                slotSet.add(this);
+                hasEngagementSlot = true;
+            }
+        }
+    }
+
+    private void releaseEngagementSlot() {
+        if (reservedTarget != null) {
+            java.util.Set<Horde> set = engagementSlots.get(reservedTarget);
+            if (set != null) set.remove(this);
+        }
+        reservedTarget = null;
+        hasEngagementSlot = false;
+    }
+
     public Horde(HordeType type, double startX, double startY) {
         this.type = type;
 
@@ -103,6 +170,7 @@ public class Horde implements Serializable {
             currentHp = maxHp;
             return false; // Belum mati, cuma ganti wujud
         }
+        releaseEngagementSlot();
         return true;
     }
 
@@ -152,6 +220,17 @@ public class Horde implements Serializable {
                 targetGuard = guard;
             }
         }
+        // --- FIX: histeresis, jangan gampang ganti-ganti Guard yang dikejar ---
+        if (lockedGuard != null && allGuards.contains(lockedGuard) && lockedGuard.currentHp > 0
+                && lockedGuard != targetGuard) {
+            double dxL = this.x - lockedGuard.x, dyL = this.y - lockedGuard.y;
+            double distToLocked = Math.sqrt(dxL * dxL + dyL * dyL);
+            if (distToLocked <= minDistance + TARGET_SWITCH_MARGIN) {
+                targetGuard = lockedGuard;
+                minDistance = distToLocked;
+            }
+        }
+        lockedGuard = targetGuard;
 
         // --- FITUR BARU: Cari Civil terdekat juga (yang gak lagi ngumpet aman di rumah) ---
         Civil targetCivil = null;
@@ -168,6 +247,17 @@ public class Horde implements Serializable {
                 }
             }
         }
+        // --- FIX: histeresis buat Civil juga ---
+        if (lockedCivil != null && allCivils != null && allCivils.contains(lockedCivil)
+                && !lockedCivil.hidden && lockedCivil.currentHp > 0 && lockedCivil != targetCivil) {
+            double dxL = this.x - lockedCivil.x, dyL = this.y - lockedCivil.y;
+            double distToLocked = Math.sqrt(dxL * dxL + dyL * dyL);
+            if (distToLocked <= minCivilDistance + TARGET_SWITCH_MARGIN) {
+                targetCivil = lockedCivil;
+                minCivilDistance = distToLocked;
+            }
+        }
+        lockedCivil = targetCivil;
 
         // --- FITUR BARU: Cari Building terdekat juga (yang udah jadi & masih ada darahnya) ---
         Building targetBuildingCandidate = null;
@@ -183,6 +273,16 @@ public class Horde implements Serializable {
                 }
             }
         }
+        // --- FIX: histeresis buat Building juga ---
+        if (lockedBuilding != null && allBuildings != null && allBuildings.contains(lockedBuilding)
+                && lockedBuilding.isBuilt && lockedBuilding.currentHp > 0 && lockedBuilding != targetBuildingCandidate) {
+            double distToLocked = distanceToRect(lockedBuilding.getSolidHitbox(), this.x, this.y);
+            if (distToLocked <= minBuildingDistance + TARGET_SWITCH_MARGIN) {
+                targetBuildingCandidate = lockedBuilding;
+                minBuildingDistance = distToLocked;
+            }
+        }
+        lockedBuilding = targetBuildingCandidate;
 
         // --- FITUR BARU: PRIORITAS BERTINGKAT (bukan lagi 'yang paling deket menang') ---
         // 1. Guard yang ada DI SEKITAR horde ini -> prioritas utama
@@ -193,8 +293,20 @@ public class Horde implements Serializable {
         final double AGGRO_BUILDING_RADIUS = 250.0;  // Building dianggap "di sekitar" kalau sedeket ini
         final double CIVIL_CHASE_LEASH = 350.0;      // Batas jauh ngejar Civil sebelum nyerah balik ke Building
 
-        boolean hasNearGuard = targetGuard != null && minDistance <= AGGRO_GUARD_RADIUS;
-        boolean hasNearBuilding = targetBuildingCandidate != null && minBuildingDistance <= AGGRO_BUILDING_RADIUS;
+        // --- FIX KEDELAPAN: histeresis level TIER (Guard vs Building vs Civil), bukan cuma
+        // level individu target. Sebelumnya hasNearGuard/hasNearBuilding dicek pakai radius
+        // tetap 250 tiap frame -> kalau horde-nya posisinya pas nyerempet radius itu (baik
+        // gara-gara dia sendiri gerak dikit, atau Guard/Building targetnya yg gerak), status
+        // ini bisa nyala-mati tiap frame -> targetX/targetY lompat total antar kategori yang
+        // beda jauh posisinya -> horde keliatan maju-mundur/plin-plan. Cuma horde yang posisinya
+        // KEBETULAN di sekitar batas 250 ini yang kena, sisanya (jelas dalem/luar radius) aman --
+        // makanya cuma "beberapa doang" yang keliatan bug. Sekarang tier yang lagi aktif dikasih
+        // "bonus" radius biar gak gampang lepas cuma gara-gara nyerempet dikit.
+        double guardRadiusEff = AGGRO_GUARD_RADIUS + (lastChosenTier == 1 ? TARGET_SWITCH_MARGIN : 0);
+        double buildingRadiusEff = AGGRO_BUILDING_RADIUS + (lastChosenTier == 2 ? TARGET_SWITCH_MARGIN : 0);
+
+        boolean hasNearGuard = targetGuard != null && minDistance <= guardRadiusEff;
+        boolean hasNearBuilding = targetBuildingCandidate != null && minBuildingDistance <= buildingRadiusEff;
 
         boolean attackingCivil = false;
         boolean attackingBuilding = false;
@@ -261,13 +373,40 @@ public class Horde implements Serializable {
             }
         }
 
+        // Simpen tier yang akhirnya kepilih frame ini, buat dipake sebagai bonus histeresis
+        // di frame BERIKUTNYA (lihat guardRadiusEff/buildingRadiusEff di atas).
+        if (attackingCivil) lastChosenTier = 3;
+        else if (attackingBuilding) lastChosenTier = 2;
+        else if (targetGuard != null) lastChosenTier = 1;
+        else lastChosenTier = 0;
+
+
+
+        // --- Tentuin objek target final (buat sistem antrian slot) & update reservasinya ---
+        Object currentTargetObj = attackingCivil ? targetCivil
+                : (attackingBuilding ? targetBuilding : targetGuard);
+        updateEngagementSlot(currentTargetObj);
 
         if (minTargetDistance >= 0) {
-            if (type == HordeType.BOWMAN) {
-                // --- LOGIKA BOWMAN (PANAH) ---
-                double attackRangePanahMusuh = 250.0; // Sedikit lebih pendek dari player biar imbang
+            double baseRange = (type == HordeType.BOWMAN) ? 250.0 : (size + 5);
 
-                if (minTargetDistance <= attackRangePanahMusuh) {
+            if (!hasEngagementSlot) {
+                // FIX: gak kebagian slot -> jangan ikut nyerbu masuk ke kerumunan.
+                // Jalan sampe jarak "antri" aman di luar radius serang, terus diem nunggu giliran.
+                wasInAttackRange = false;
+                double waitDistance = baseRange + QUEUE_GAP;
+                if (minTargetDistance > waitDistance) {
+                    moveTowardTarget(targetX, targetY, allBuildings);
+                }
+                // kalau udah di dalam waitDistance -> diem aja, gak maju lagi & gak nyerang
+            } else if (type == HordeType.BOWMAN) {
+                // --- LOGIKA BOWMAN (PANAH) ---
+                double attackRangePanahMusuh = baseRange; // Sedikit lebih pendek dari player biar imbang
+                double effectiveRangeBowman = wasInAttackRange
+                        ? attackRangePanahMusuh + ATTACK_RANGE_HYSTERESIS : attackRangePanahMusuh;
+
+                if (minTargetDistance <= effectiveRangeBowman) {
+                    wasInAttackRange = true;
                     // Masuk jarak tembak: Berhenti dan Tembak (Cek cooldown)
                     // --- FITUR BARU: Saat menembak, tetap hadap ke arah target ---
                     if (targetX > this.x + FACING_DEADZONE) facingRight = true;
@@ -286,14 +425,18 @@ public class Horde implements Serializable {
                         lastAttackTime = currentTime;
                     }
                 } else {
+                    wasInAttackRange = false;
                     // Di luar jarak tembak: Maju! (sekarang pakai PathFinder, bukan garis lurus)
                     moveTowardTarget(targetX, targetY, allBuildings);
                 }
 
             } else {
                 // --- LOGIKA MELEE (AXEMAN & SHIELD - Tetap aslinya) ---
-                double attackRangeMeleeMusuh = size + 5;
-                if (minTargetDistance <= attackRangeMeleeMusuh) {
+                double attackRangeMeleeMusuh = baseRange;
+                double effectiveRangeMelee = wasInAttackRange
+                        ? attackRangeMeleeMusuh + ATTACK_RANGE_HYSTERESIS : attackRangeMeleeMusuh;
+                if (minTargetDistance <= effectiveRangeMelee) {
+                    wasInAttackRange = true;
                     // --- FITUR BARU: Saat memukul, tetap hadap ke arah target ---
                     if (targetX > this.x + FACING_DEADZONE) facingRight = true;
                     else if (targetX < this.x - FACING_DEADZONE) facingRight = false;
@@ -310,40 +453,66 @@ public class Horde implements Serializable {
                         lastAttackTime = currentTime;
                     }
                 } else {
+                    wasInAttackRange = false;
                     // Di luar jarak serang: Maju! (sekarang pakai PathFinder, bukan garis lurus)
                     moveTowardTarget(targetX, targetY, allBuildings);
                 }
             }
         }
 
-        // --- Logika Anti-Tumpuk (Dipertahankan) ---
+        // --- Logika Anti-Tumpuk (Dipertahankan, tapi sekarang di-cap) ---
+        // FIX: Sebelumnya dorongan dari SETIAP tetangga (Horde lain + Guard) langsung
+        // ditambahin ke this.x/this.y tanpa batas. Kalau lagi rame (banyak horde numpuk
+        // nyerbu bareng), total dorongan dalam 1 frame bisa lebih gede dari `speed` horde
+        // itu sendiri -> gerakan "menuju target" ke-overwrite sama dorongan yang arahnya
+        // acak & berubah-ubah tiap frame (tergantung siapa aja yang deket saat itu).
+        // Itu yang bikin horde keliatan zigzag/plin-plan random pas lagi rame-rame.
+        // Solusi: akumulasi dulu semua dorongan, baru di-cap magnitude-nya sebelum diterapkan.
         int personalSpace = size - 5;
+        double pushX = 0, pushY = 0;
         for (Horde other : allHordes) {
             if (other == this) continue;
             double dx = this.x - other.x;
             double dy = this.y - other.y;
             double distanceSq = dx * dx + dy * dy;
             if (distanceSq == 0) {
-                this.x += Math.random() * 2 - 1; this.y += Math.random() * 2 - 1; continue;
+                pushX += Math.random() * 2 - 1; pushY += Math.random() * 2 - 1; continue;
             }
             if (distanceSq < personalSpace * personalSpace) {
                 double distance = Math.sqrt(distanceSq);
                 double pushForce = (personalSpace - distance) / personalSpace;
-                this.x += (dx / distance) * pushForce * 1.5;
-                this.y += (dy / distance) * pushForce * 1.5;
+                pushX += (dx / distance) * pushForce * 1.5;
+                pushY += (dy / distance) * pushForce * 1.5;
             }
         }
         for (Guard guard : allGuards) {
+            // FIX KELIMA: kalau horde lagi aktif nyerang (nempel di jarak serang), dia MEMANG
+            // seharusnya deket sama Guard di sekitarnya -- itu bukan "numpuk" yang perlu
+            // dirapiin. Sebelumnya push ini tetap jalan walau lagi nyerang, jadi ada tarik-menarik
+            // terus-terusan antara "narik deket buat mukul" vs "didorong anti-tumpuk" tiap frame,
+            // apalagi kalau Guard-nya emang sengaja dibikin formasi padat (statis, gak minggir).
+            // Sekarang: kalau lagi nempel nyerang, gak usah didorong-dorong lagi oleh Guard.
+            if (wasInAttackRange) continue;
+
             double dx = this.x - guard.x;
             double dy = this.y - guard.y;
             double distanceSq = dx * dx + dy * dy;
             if (distanceSq < personalSpace * personalSpace && distanceSq > 0) {
                 double distance = Math.sqrt(distanceSq);
                 double pushForce = (personalSpace - distance) / personalSpace;
-                this.x += (dx / distance) * pushForce * 1.5;
-                this.y += (dy / distance) * pushForce * 1.5;
+                pushX += (dx / distance) * pushForce * 1.5;
+                pushY += (dy / distance) * pushForce * 1.5;
             }
         }
+
+        double pushMag = Math.sqrt(pushX * pushX + pushY * pushY);
+        double maxPush = Math.max(speed * 1.2, 0.8); // gak boleh lebih kuat dari gerak normal horde
+        if (pushMag > maxPush) {
+            pushX = (pushX / pushMag) * maxPush;
+            pushY = (pushY / pushMag) * maxPush;
+        }
+        this.x += pushX;
+        this.y += pushY;
     }
 
 
@@ -382,9 +551,54 @@ public class Horde implements Serializable {
     }
     // Kalau target gak reachable sama sekali (terkurung tembok tanpa celah),
     // otomatis alihkan buat ngehancurin Wall terdekat yang beneran reachable dulu.
+    // --- FIX KETIGA: bug "maju-mundur" ---
+    // Sebelumnya hasClearLine() dicek di paling awal moveTowardTarget() TIAP FRAME, lepas dari
+    // throttle repath. Efeknya horde bisa gonta-ganti mode "jalan lurus" vs "ikutin path A*"
+    // tiap frame: pas kebetulan hasClearLine() bilang "clear" -> jalan lurus (kadang malah
+    // nabrak nyerempet tembok), lalu frame berikutnya jadi "gak clear" -> switch ke path A*
+    // yang rute-nya balik ngejauhin tembok dulu -> begitu mundur dikit "clear" lagi -> maju
+    // lurus lagi -> looping maju-mundur. Sekarang keputusan mode cuma diambil ulang di siklus
+    // repath yang sama (throttled), bukan tiap frame.
+    private boolean usingDirectLine = false;
+
     private void moveTowardTarget(double tx, double ty, List<Building> allBuildings) {
-        if (hasClearLine(x, y, tx, ty, allBuildings)) {
-            path = null;
+        long now = System.currentTimeMillis();
+        boolean targetMoved = Double.isNaN(lastMoveTargetX)
+                || Math.hypot(tx - lastMoveTargetX, ty - lastMoveTargetY) > TARGET_MOVE_REPATH_THRESHOLD;
+        boolean needRepath = path == null || (path.isEmpty() && !usingDirectLine)
+                || pathIndex >= path.size() || now - lastChasePathTime > CHASE_REPATH_COOLDOWN || targetMoved;
+
+        if (needRepath) {
+            lastChasePathTime = now;
+            lastMoveTargetX = tx;
+            lastMoveTargetY = ty;
+
+            if (hasClearLine(x, y, tx, ty, allBuildings)) {
+                usingDirectLine = true;
+                path = null;
+            } else {
+                usingDirectLine = false;
+                List<Point> newPath = PathFinder.findPath(x, y, tx, ty, allBuildings);
+
+                if (newPath.isEmpty() && allBuildings != null) {
+                    Building nearestWall = findNearestReachableWall(allBuildings);
+                    if (nearestWall != null) {
+                        forcedWallTarget = nearestWall;
+                        Point2D.Double np = nearestPointOnRect(nearestWall.getSolidHitbox(), x, y);
+                        newPath = PathFinder.findPath(x, y, np.x, np.y, allBuildings);
+                    } else {
+                        forcedWallTarget = null; // Beneran gak ada jalan sama sekali, jangan nyangkut ke wall lama
+                    }
+                } else {
+                    forcedWallTarget = null;
+                }
+
+                path = newPath;
+                pathIndex = 0;
+            }
+        }
+
+        if (usingDirectLine) {
             double dx = tx - x, dy = ty - y;
             double dist = Math.sqrt(dx * dx + dy * dy);
             if (dist > 1) {
@@ -394,29 +608,6 @@ public class Horde implements Serializable {
                 y += (dy / dist) * speed;
             }
             return;
-        }
-
-        long now = System.currentTimeMillis();
-        boolean needRepath = path == null || path.isEmpty() || pathIndex >= path.size()
-                || now - lastChasePathTime > CHASE_REPATH_COOLDOWN;
-
-        if (needRepath) {
-            List<Point> newPath = PathFinder.findPath(x, y, tx, ty, allBuildings);
-
-            if (newPath.isEmpty() && allBuildings != null) {
-                Building nearestWall = findNearestReachableWall(allBuildings);
-                if (nearestWall != null) {
-                    forcedWallTarget = nearestWall;
-                    Point2D.Double np = nearestPointOnRect(nearestWall.getSolidHitbox(), x, y);
-                    newPath = PathFinder.findPath(x, y, np.x, np.y, allBuildings);
-                }
-            } else {
-                forcedWallTarget = null;
-            }
-
-            path = newPath;
-            pathIndex = 0;
-            lastChasePathTime = now;
         }
 
         if (path != null && pathIndex < path.size()) {
@@ -459,14 +650,37 @@ public class Horde implements Serializable {
     }
 
     // --- FITUR BARU: Cari Wall terdekat yang beneran bisa dijangkau (path-nya gak kosong) ---
+    // --- FIX KETUJUH: bug "sebagian horde doang" maju-mundur -> ini pemilihan tembok fallback
+    // yang gak punya histeresis sama sekali, beda dari target Guard/Building/Civil yang udah
+    // di-lock. Tiap kali repath (~600ms), fungsi ini nyari ULANG dari nol tembok mana yang
+    // paling deket. Horde ini sendiri gerak dikit tiap frame, jadi kalau ada 2+ tembok yang
+    // jaraknya nyaris sama, hasil "paling deket" bisa keganti-ganti tiap siklus repath ->
+    // forcedWallTarget lompat dari tembok A ke B ke A lagi -> horde balik arah tiap kali itu
+    // kejadian. HANYA horde yang emang kebentur skenario "harus jebol tembok" ini yang kena,
+    // makanya cuma sebagian horde doang yang keliatan maju-mundur, sisanya normal.
     private Building findNearestReachableWall(List<Building> allBuildings) {
         Building nearest = null;
         double bestDist = Double.MAX_VALUE;
+
+        // Kalau lagi udah megang satu wall target & itu masih valid+reachable, kasih "diskon"
+        // jarak (TARGET_SWITCH_MARGIN) biar gak gampang ke-switch ke wall lain yang cuma
+        // dikit lebih deket.
+        if (forcedWallTarget != null && forcedWallTarget.isBuilt && forcedWallTarget.currentHp > 0) {
+            double d = distanceToRect(forcedWallTarget.getSolidHitbox(), x, y);
+            List<Point> p = PathFinder.findPath(x, y,
+                    forcedWallTarget.getSolidHitbox().getCenterX(), forcedWallTarget.getSolidHitbox().getCenterY(), allBuildings);
+            if (!p.isEmpty()) {
+                bestDist = Math.max(0, d - TARGET_SWITCH_MARGIN);
+                nearest = forcedWallTarget;
+            }
+        }
+
         for (Building b : allBuildings) {
             if (!b.isBuilt || b.currentHp <= 0) continue;
             if (b.type != Building.BuildingType.WALL_L
                     && b.type != Building.BuildingType.WALL_R
                     && b.type != Building.BuildingType.WALL_UD) continue;
+            if (b == forcedWallTarget) continue; // udah dicek duluan di atas
 
             double d = distanceToRect(b.getSolidHitbox(), x, y);
             if (d >= bestDist) continue;

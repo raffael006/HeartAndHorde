@@ -74,7 +74,18 @@ public class PathFinder {
         Node targetNode = grid[targetCol][targetRow];
         openList.add(startNode);
 
+        // FIX: kalau target gak reachable sama sekali (terkurung tembok), tanpa batas ini
+        // algoritma bakal nyisir SEMUA node yang reachable (bisa ribuan cell) dulu sebelum
+        // nyerah balikin path kosong -> mahal banget & dipanggil ulang tiap ~600ms per horde
+        // yang kejebak, bikin lag/stutter. Kasih batas wajar, kalau kelewat ya anggap aja gak
+        // ketemu (Horde.java udah punya fallback nyerang wall terdekat buat kasus ini).
+        final int MAX_NODES_EXPLORED = 4000;
+        int nodesExplored = 0;
+
         while (!openList.isEmpty()) {
+            if (++nodesExplored > MAX_NODES_EXPLORED) {
+                return new ArrayList<>();
+            }
             Node currentNode = openList.poll();
             closedList[currentNode.col][currentNode.row] = true;
 
@@ -102,12 +113,20 @@ public class PathFinder {
 
                         int moveCost = (Math.abs(i) == 1 && Math.abs(j) == 1) ? 14 : 10;
                         int newCost = currentNode.gCost + moveCost;
+                        boolean alreadyQueued = openList.contains(neighbor);
 
-                        if (newCost < neighbor.gCost || !openList.contains(neighbor)) {
+                        if (newCost < neighbor.gCost || !alreadyQueued) {
                             neighbor.gCost = newCost;
                             neighbor.hCost = (Math.abs(checkCol - targetCol) + Math.abs(checkRow - targetRow)) * 10;
                             neighbor.parent = currentNode;
-                            if (!openList.contains(neighbor)) openList.add(neighbor);
+                            // FIX: PriorityQueue Java gak auto re-sort kalau field yg dipakai compareTo
+                            // berubah setelah item-nya udah di-add. Kalau node ini udah ada di queue &
+                            // cost-nya baru aja di-update (lebih murah), harus di-remove dulu baru di-add
+                            // ulang biar posisinya di heap ke-refresh sesuai cost yg baru.
+                            if (alreadyQueued) {
+                                openList.remove(neighbor);
+                            }
+                            openList.add(neighbor);
                         }
                     }
                 }
