@@ -15,13 +15,18 @@ import java.util.Map;
  */
 public class WaveManager {
 
-    public static final int MAX_WAVE = 5;
+    // --- REVISI: sekarang 10 wave (I..X), ngikutin isi DifficultyConfig yang baru ---
+    public static final int MAX_WAVE = 10;
     public static final String[] WAVE_ROMAN = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
 
     private GameWindow.Difficulty currentDifficulty = GameWindow.Difficulty.MEDIUM;
     private int currentWaveIndex = 0;
     private int waveCountdownTicks = 0;
     private boolean allWavesSpawned = false;
+    // --- FITUR BARU: true selagi Horde wave yang barusan di-spawn masih ada yang hidup.
+    // Selama ini true, countdown ke wave berikutnya DIBEKUKAN dulu -- baru jalan lagi
+    // begitu window.activeHordes kosong (semua Horde wave ini mati/tumpas). ---
+    private boolean waveInProgress = false;
 
     /**
      * Dipanggil dari GamePanel.resetCampaign(difficulty) -- menyalakan ulang sistem wave
@@ -31,26 +36,37 @@ public class WaveManager {
         this.currentDifficulty = difficulty;
         this.currentWaveIndex = 0;
         this.allWavesSpawned = false;
+        this.waveInProgress = false;
         this.waveCountdownTicks = DifficultyConfig.getWaves(currentDifficulty).get(0).intervalTicks;
     }
 
     /**
      * Dipanggil tiap tick dari game loop GamePanel. Menghitung mundur, lalu men-spawn
-     * wave berikutnya ke window.activeHordes begitu countdown habis.
+     * wave berikutnya ke window.activeHordes begitu countdown habis. Countdown ke wave
+     * SETELAHNYA baru mulai jalan lagi kalau Horde wave yang barusan spawn udah abis semua.
      */
     public void tick(GameWindow window) {
         if (allWavesSpawned) return;
+
+        // --- FITUR BARU: lagi nunggu Horde wave sekarang tumpas dulu -> countdown dibekukan ---
+        if (waveInProgress) {
+            if (window.activeHordes.isEmpty()) {
+                waveInProgress = false; // Horde wave ini abis -> boleh mulai hitung mundur wave berikutnya
+                if (currentWaveIndex >= MAX_WAVE) {
+                    allWavesSpawned = true;
+                } else {
+                    waveCountdownTicks = DifficultyConfig.getWaves(currentDifficulty).get(currentWaveIndex).intervalTicks;
+                }
+            }
+            return; // Selama masih ada Horde hidup, jangan kurangi waveCountdownTicks
+        }
 
         if (waveCountdownTicks > 0) {
             waveCountdownTicks--;
         } else {
             spawnWave(currentWaveIndex, window);
             currentWaveIndex++;
-            if (currentWaveIndex >= MAX_WAVE) {
-                allWavesSpawned = true;
-            } else {
-                waveCountdownTicks = DifficultyConfig.getWaves(currentDifficulty).get(currentWaveIndex).intervalTicks;
-            }
+            waveInProgress = true; // Tunggu Horde wave ini abis dulu sebelum lanjut ke countdown berikutnya
         }
     }
 
@@ -103,4 +119,6 @@ public class WaveManager {
     public int getWaveCountdownTicks() { return waveCountdownTicks; }
     public boolean isAllWavesSpawned() { return allWavesSpawned; }
     public GameWindow.Difficulty getCurrentDifficulty() { return currentDifficulty; }
+    // --- FITUR BARU: true kalau lagi fase "nunggu Horde wave sekarang abis", bukan fase hitung mundur ---
+    public boolean isWaveInProgress() { return waveInProgress; }
 }

@@ -1,9 +1,21 @@
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
 import java.util.LinkedList;
 import java.util.List;
 
 public class GameWindow extends JFrame {
+
+    public static Font VIKING_FONT;
+    private static void loadCustomFont() {
+        try {
+            VIKING_FONT = Font.createFont(Font.TRUETYPE_FONT, new File("assets/fonts/VidirT2-nLWP.ttf"));
+            GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(VIKING_FONT);
+        } catch (Exception e) {
+            System.out.println("Gagal load font Norse: " + e.getMessage());
+            VIKING_FONT = new Font("Serif", Font.PLAIN, 12); // fallback biar gak crash
+        }
+    }
 
     // Alat pemindah layar
     private CardLayout cardLayout;
@@ -28,6 +40,7 @@ public class GameWindow extends JFrame {
     public Difficulty selectedDifficulty = Difficulty.MEDIUM;
 
     public GameWindow() {
+        loadCustomFont();
         setTitle("Heart & Horde ~ Bloodshed in Cryonia");
         setSize(1920, 1080);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

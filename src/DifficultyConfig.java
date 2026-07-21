@@ -1,32 +1,41 @@
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 // ============================================================================
 // FITUR BARU: FILE KHUSUS BUAT HARDCODE KONFIGURASI DIFFICULTY & WAVE HORDE
 // ============================================================================
 // Semua isi wave (jenis Horde, arah datangnya, & jarak waktu antar wave) buat
-// Easy / Medium / Hard SENGAJA di-tulis manual satu-satu di sini (BUKAN random
-// sama sekali -- tidak ada java.util.Random di file ini), supaya gampang diubah-ubah
-// kapan aja tanpa perlu bongkar logic yang ada di GamePanel.
+// Easy / Medium / Hard SENGAJA di-tulis manual di sini (BUKAN random sama sekali
+// -- tidak ada java.util.Random di file ini), supaya gampang diubah-ubah kapan
+// aja tanpa perlu bongkar logic yang ada di GamePanel/WaveManager.
+//
+// --- REVISI: sekarang 10 wave (I..X), cuma 2 SISI spawn (bukan 8 arah lagi biar
+// horde-nya kerasa kayak GEROMBOLAN nyerang dari 2 sisi, bukan nyebar tipis-tipis),
+// dan jenis Horde yang muncul di-unlock bertahap per rentang wave:
+//   Wave 1-2  : AXEMAN + BOWMAN
+//   Wave 3-4  : + SHIELDBEARER + TWO_AXE
+//   Wave 5-7  : + LOG + BEAR
+//   Wave 8-10 : + SORCERER (semua jenis lengkap)
 //
 // CARA EDIT:
-// 1. Tiap difficulty (EASY_WAVES / MEDIUM_WAVES / HARD_WAVES) isinya 5 WaveData,
-//    urut dari Wave I sampai Wave V.
-// 2. Tiap WaveData = new WaveData(intervalTicks, daftarHorde)
-//      - intervalTicks -> lama waktu HITUNG MUNDUR (dalam tick) sebelum wave ini
-//        muncul, dihitung sejak wave sebelumnya selesai di-spawn (atau sejak
-//        Campaign dimulai untuk Wave I). 60 tick = 1 detik (sama kayak siklus siang-malam).
-//      - daftarHorde -> urutan PERSIS Horde yang bakal muncul di wave itu, ditulis
-//        pakai shortcut axe(...) / shield(...) / bow(...) + arah datangnya (8 mata angin).
-//        Urutan & jumlahnya FIX sesuai yang ditulis di sini, tidak diacak sama sekali.
-// 3. Tinggal tambah/hapus/copy-paste baris axe(...)/shield(...)/bow(...) buat ngatur
-//    jenis & arah tiap Horde satu-satu, atau ganti angka intervalTicks buat ngatur
-//    cepat/lambatnya wave itu datang.
+// 1. Mau ganti 2 SISI datangnya horde (default NORTH & SOUTH) -> tinggal ganti
+//    SIDE_A / SIDE_B di bawah, otomatis kepakai buat semua wave & semua difficulty.
+// 2. Mau ganti kapan suatu jenis Horde di-unlock -> edit TIER_1..TIER_4 dan/atau
+//    method getTierForWave() (batas index wave-nya).
+// 3. Mau ganti berapa lama wave ke-N nunggu / berapa banyak Horde-nya -> tinggal
+//    ubah angka di array *_INTERVALS / *_COUNTS (index 0 = Wave I, index 9 = Wave X).
+//    Isi Horde per wave OTOMATIS diracik dari TIER + COUNT itu (dibagi rata per
+//    jenis yang lagi unlock, lalu dibagi 2 buat SIDE_A/SIDE_B) -- tetap 100%
+//    deterministik/fix, tidak ada elemen acak sama sekali.
 public class DifficultyConfig {
 
-    // --- 8 Arah mata angin, buat nentuin DARI SISI MANA Horde itu muncul di tepi map ---
-    // Tiap HordeSpawnEntry milih salah satu arah ini secara eksplisit/manual (bukan random).
+    // --- Arah mata angin (tetap disediakan 8 kalau suatu saat mau dipakai lagi) ---
     public enum SpawnDirection { NORTH, SOUTH, EAST, WEST, NORTH_EAST, NORTH_WEST, SOUTH_EAST, SOUTH_WEST }
+
+    // --- REVISI: cuma 2 SISI yang dipakai buat spawn wave sekarang. Ganti di sini
+    // aja kalau mau pindah sisi (misal ke EAST & WEST), semua wave ikut berubah. ---
+    private static final SpawnDirection SIDE_A = SpawnDirection.NORTH;
+    private static final SpawnDirection SIDE_B = SpawnDirection.SOUTH;
 
     // Satu entri = SATU Horde yang bakal spawn: tipe-nya apa & dari arah mana. Nilainya final/fix.
     public static class HordeSpawnEntry {
@@ -48,140 +57,71 @@ public class DifficultyConfig {
         }
     }
 
-    // --- Shortcut penulisan biar list di bawah gak kepanjangan ---
-    private static HordeSpawnEntry axe(SpawnDirection dir)    { return new HordeSpawnEntry(Horde.HordeType.AXEMAN, dir); }
-    private static HordeSpawnEntry shield(SpawnDirection dir) { return new HordeSpawnEntry(Horde.HordeType.SHIELDBEARER, dir); }
-    private static HordeSpawnEntry bow(SpawnDirection dir)    { return new HordeSpawnEntry(Horde.HordeType.BOWMAN, dir); }
+    // --- REVISI: jenis Horde yang di-unlock bertahap sesuai rentang wave yang lo minta ---
+    private static final Horde.HordeType[] TIER_1 = { Horde.HordeType.AXEMAN, Horde.HordeType.BOWMAN };
+    private static final Horde.HordeType[] TIER_2 = { Horde.HordeType.AXEMAN, Horde.HordeType.BOWMAN,
+            Horde.HordeType.SHIELDBEARER, Horde.HordeType.TWO_AXE };
+    private static final Horde.HordeType[] TIER_3 = { Horde.HordeType.AXEMAN, Horde.HordeType.BOWMAN,
+            Horde.HordeType.SHIELDBEARER, Horde.HordeType.TWO_AXE, Horde.HordeType.LOG, Horde.HordeType.BEAR };
+    private static final Horde.HordeType[] TIER_4 = { Horde.HordeType.AXEMAN, Horde.HordeType.BOWMAN,
+            Horde.HordeType.SHIELDBEARER, Horde.HordeType.TWO_AXE, Horde.HordeType.LOG, Horde.HordeType.BEAR,
+            Horde.HordeType.SORCERER };
 
-    // ==========================================================================
-    // EASY -> wave lebih jarang muncul, Horde lebih sedikit & didominasi Axeman (lemah)
-    // ==========================================================================
-    private static final List<WaveData> EASY_WAVES = Arrays.asList(
-            // Wave I - nunggu 90 detik (5400 tick), 4 Horde dari Utara & Selatan
-            new WaveData(5400, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH)
-            )),
-            // Wave II - nunggu 80 detik (4800 tick), 6 Horde, mulai ada Shieldbearer dari Timur
-            new WaveData(4800, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST)
-            )),
-            // Wave III - nunggu 70 detik (4200 tick), 8 Horde dari 4 arah
-            new WaveData(4200, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.WEST)
-            )),
-            // Wave IV - nunggu 60 detik (3600 tick), 10 Horde, Bowman pertama muncul
-            new WaveData(3600, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.EAST)
-            )),
-            // Wave V (TERAKHIR) - nunggu 50 detik (3000 tick), 12 Horde dari segala arah
-            new WaveData(3000, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.SOUTH_WEST)
-            ))
-    );
+    // waveIdx 0-based: 0-1 = Wave I-II, 2-3 = Wave III-IV, 4-6 = Wave V-VII, 7-9 = Wave VIII-X
+    private static Horde.HordeType[] getTierForWave(int waveIdx) {
+        if (waveIdx <= 1) return TIER_1;
+        if (waveIdx <= 3) return TIER_2;
+        if (waveIdx <= 6) return TIER_3;
+        return TIER_4;
+    }
 
-    // ==========================================================================
-    // MEDIUM -> keseimbangan standar antara ancaman & waktu bersiap
-    // ==========================================================================
-    private static final List<WaveData> MEDIUM_WAVES = Arrays.asList(
-            // Wave I - nunggu 60 detik (3600 tick), 6 Horde
-            new WaveData(3600, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), bow(SpawnDirection.WEST)
-            )),
-            // Wave II - nunggu 53 detik (3180 tick), 9 Horde
-            new WaveData(3180, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.EAST), bow(SpawnDirection.WEST)
-            )),
-            // Wave III - nunggu 46 detik (2760 tick), 12 Horde
-            new WaveData(2760, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST), bow(SpawnDirection.SOUTH_EAST)
-            )),
-            // Wave IV - nunggu 39 detik (2340 tick), 15 Horde
-            new WaveData(2340, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_WEST)
-            )),
-            // Wave V (TERAKHIR) - nunggu 32 detik (1920 tick), 18 Horde dari segala arah
-            new WaveData(1920, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_WEST), bow(SpawnDirection.SOUTH_WEST)
-            ))
-    );
+    // --- REVISI: total Horde per wave (index 0 = Wave I ... index 9 = Wave X) buat tiap difficulty.
+    // Gampang diubah -- tinggal ganti angkanya di sini, otomatis kepakai buat racik gerombolannya. ---
+    private static final int[] EASY_INTERVALS   = {5400, 5100, 4800, 4500, 4200, 3900, 3600, 3300, 3000, 2700};
+    private static final int[] EASY_COUNTS      = {   4,    6,    8,   10,   13,   16,   19,   23,   27,   32};
 
-    // ==========================================================================
-    // HARD -> wave datang cepat, Horde banyak & didominasi Shieldbearer/Bowman (kuat & mematikan)
-    // ==========================================================================
-    private static final List<WaveData> HARD_WAVES = Arrays.asList(
-            // Wave I - nunggu 40 detik (2400 tick), 8 Horde dari 4 arah sekaligus
-            new WaveData(2400, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_WEST)
-            )),
-            // Wave II - nunggu 34 detik (2040 tick), 12 Horde
-            new WaveData(2040, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH),
-                    axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_WEST), bow(SpawnDirection.EAST)
-            )),
-            // Wave III - nunggu 28 detik (1680 tick), 16 Horde
-            new WaveData(1680, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.WEST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_WEST), bow(SpawnDirection.SOUTH_WEST),
-                    bow(SpawnDirection.EAST), bow(SpawnDirection.WEST)
-            )),
-            // Wave IV - nunggu 22 detik (1320 tick), 20 Horde
-            new WaveData(1320, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.EAST),
-                    shield(SpawnDirection.WEST), shield(SpawnDirection.WEST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_WEST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_WEST), bow(SpawnDirection.SOUTH_WEST),
-                    bow(SpawnDirection.EAST), bow(SpawnDirection.WEST)
-            )),
-            // Wave V (TERAKHIR) - nunggu 15 detik (900 tick), 24 Horde dari SEMUA arah sekaligus
-            new WaveData(900, Arrays.asList(
-                    axe(SpawnDirection.NORTH), axe(SpawnDirection.NORTH), axe(SpawnDirection.SOUTH), axe(SpawnDirection.SOUTH),
-                    shield(SpawnDirection.EAST), shield(SpawnDirection.EAST), shield(SpawnDirection.EAST),
-                    shield(SpawnDirection.WEST), shield(SpawnDirection.WEST), shield(SpawnDirection.WEST),
-                    bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_EAST), bow(SpawnDirection.NORTH_EAST),
-                    bow(SpawnDirection.NORTH_WEST), bow(SpawnDirection.NORTH_WEST), bow(SpawnDirection.NORTH_WEST),
-                    bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_EAST), bow(SpawnDirection.SOUTH_EAST),
-                    bow(SpawnDirection.SOUTH_WEST), bow(SpawnDirection.SOUTH_WEST), bow(SpawnDirection.SOUTH_WEST),
-                    bow(SpawnDirection.EAST), bow(SpawnDirection.WEST)
-            ))
-    );
+    private static final int[] MEDIUM_INTERVALS = {3600, 3300, 3000, 2700, 2400, 2100, 1800, 1500, 1200, 1000};
+    private static final int[] MEDIUM_COUNTS    = {   6,    9,   13,   17,   22,   27,   33,   39,   46,   54};
 
-    // --- Ambil semua wave (I..V) sesuai difficulty yang dipilih pemain ---
+    // --- HARD: interval-nya paling singkat & COUNT paling gede -> ini yang bikin "gerombolan banget" ---
+    private static final int[] HARD_INTERVALS   = {2400, 2100, 1800, 1500, 1200, 1000,  900,  800,  700,  600};
+    private static final int[] HARD_COUNTS      = {  10,   14,   20,   26,   32,   38,   44,   50,   58,   68};
+
+    private static final List<WaveData> EASY_WAVES   = buildDifficultyWaves(EASY_INTERVALS, EASY_COUNTS);
+    private static final List<WaveData> MEDIUM_WAVES = buildDifficultyWaves(MEDIUM_INTERVALS, MEDIUM_COUNTS);
+    private static final List<WaveData> HARD_WAVES   = buildDifficultyWaves(HARD_INTERVALS, HARD_COUNTS);
+
+    // Rakit 10 WaveData dari array interval & total count di atas. Murni loop atas angka yang
+    // udah di-hardcode -- BUKAN random, hasilnya selalu sama tiap kali dijalankan.
+    private static List<WaveData> buildDifficultyWaves(int[] intervals, int[] counts) {
+        List<WaveData> waves = new ArrayList<>();
+        for (int i = 0; i < intervals.length; i++) {
+            waves.add(new WaveData(intervals[i], buildWave(counts[i], getTierForWave(i))));
+        }
+        return waves;
+    }
+
+    // Bagi `totalCount` Horde rata ke tiap jenis yang lagi unlock (sisa pembagian ditumpuk ke
+    // jenis pertama), lalu tiap jenis dibagi 2 lagi ke SIDE_A & SIDE_B (sisa ganjil ke SIDE_A).
+    // Semua pembagian ini deterministik (murni pembagian bilangan bulat), tidak ada Random.
+    private static List<HordeSpawnEntry> buildWave(int totalCount, Horde.HordeType[] unlockedTypes) {
+        List<HordeSpawnEntry> list = new ArrayList<>();
+        int n = unlockedTypes.length;
+        int base = totalCount / n;
+        int remainder = totalCount % n;
+
+        for (int i = 0; i < n; i++) {
+            int countForType = base + (i < remainder ? 1 : 0);
+            int sideACount = countForType - (countForType / 2);
+            int sideBCount = countForType / 2;
+
+            for (int j = 0; j < sideACount; j++) list.add(new HordeSpawnEntry(unlockedTypes[i], SIDE_A));
+            for (int j = 0; j < sideBCount; j++) list.add(new HordeSpawnEntry(unlockedTypes[i], SIDE_B));
+        }
+        return list;
+    }
+
+    // --- Ambil semua wave (I..X) sesuai difficulty yang dipilih pemain ---
     public static List<WaveData> getWaves(GameWindow.Difficulty difficulty) {
         switch (difficulty) {
             case EASY: return EASY_WAVES;

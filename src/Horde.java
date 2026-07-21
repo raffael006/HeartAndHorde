@@ -126,7 +126,7 @@ public class Horde implements Serializable {
         if (this.type == HordeType.AXEMAN) {
             this.maxHp = 80;
             this.attackDamage = 10;
-            this.speed = 0.8;
+            this.speed = 1;
             this.attackCooldown = 1200;
         } else if (this.type == HordeType.SHIELDBEARER) {
             this.maxHp = 150; // Darah paling tebal (Tank)
@@ -417,6 +417,7 @@ public class Horde implements Serializable {
                             // --- FITUR BARU: Panah ke Building damage langsung ---
                             // (sistem collision Projectile yang ada cuma ngecek nabrak Horde/Guard, belum Building,
                             // jadi biar Bowman tetap bisa "menembak" bangunan, damage-nya langsung dikenakan)
+                            allProjectiles.add(new Projectile(x, y, targetX, targetY, false, 0));
                             targetBuilding.currentHp -= effectiveDamage;
                         } else {
                             // BUAT PROYEKTIL BARU (false = dari horde, damage 15)

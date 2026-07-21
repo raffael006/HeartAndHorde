@@ -731,6 +731,13 @@ public class GamePanel extends JPanel {
                 } else if (waveManager.isAllWavesSpawned()) {
                     text = "WAVE " + WaveManager.WAVE_ROMAN[WaveManager.MAX_WAVE - 1] + " — WAVE TERAKHIR!";
                     textColor = new Color(230, 90, 80);
+                } else if (waveManager.isWaveInProgress()) {
+                    // --- FITUR BARU: selama Horde wave sekarang masih hidup, countdown lagi dibekukan
+                    // di WaveManager -> jangan nampilin "00:00" beku, tampilin status "lagi diserbu" ---
+                    int attackingWaveIdx = waveManager.getCurrentWaveIndex() - 1;
+                    text = "WAVE " + WaveManager.WAVE_ROMAN[attackingWaveIdx] + " sedang menyerbu — habisi semua Horde!";
+                    float pulse = 0.55f + 0.45f * (float) Math.sin(System.currentTimeMillis() * 0.01);
+                    textColor = new Color(230, (int) (90 * pulse) + 40, (int) (80 * pulse) + 30);
                 } else {
                     int totalSeconds = waveManager.getWaveCountdownTicks() / 60;
                     int minutes = totalSeconds / 60;

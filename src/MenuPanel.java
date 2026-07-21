@@ -329,7 +329,7 @@ public class MenuPanel extends JPanel {
         panel.add(Box.createRigidArea(new Dimension(0, 120)));
 
         JLabel title = new JLabel("SELECT SAVE DATA");
-        title.setFont(new Font("Georgia", Font.BOLD, 36)); title.setForeground(new Color(230, 200, 150));
+        title.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 36f)); title.setForeground(new Color(230, 200, 150));
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(title); panel.add(Box.createRigidArea(new Dimension(0, 60)));
 
@@ -359,12 +359,12 @@ public class MenuPanel extends JPanel {
         panel.add(Box.createRigidArea(new Dimension(0, 100)));
 
         JLabel title = new JLabel("SELECT DIFFICULTY");
-        title.setFont(new Font("Georgia", Font.BOLD, 36)); title.setForeground(new Color(230, 200, 150));
+        title.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 36f)); title.setForeground(new Color(230, 200, 150));
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(title); panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         JLabel subtitle = new JLabel("Menentukan jenis, jumlah, dan kecepatan munculnya wave Horde");
-        subtitle.setFont(new Font("Serif", Font.ITALIC, 15)); subtitle.setForeground(new Color(170, 150, 120));
+        subtitle.setFont(GameWindow.VIKING_FONT.deriveFont(Font.ITALIC, 15f)); subtitle.setForeground(new Color(170, 150, 120));
         subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(subtitle); panel.add(Box.createRigidArea(new Dimension(0, 50)));
 
@@ -401,12 +401,12 @@ public class MenuPanel extends JPanel {
                 g2d.setStroke(new BasicStroke(hover ? 2.2f : 1.4f));
                 g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
 
-                g2d.setFont(new Font("Serif", Font.BOLD, 22));
+                g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 22f));
                 FontMetrics fmT = g2d.getFontMetrics();
                 g2d.setColor(hover ? Color.WHITE : new Color(225, 220, 210));
                 g2d.drawString(label, (getWidth() - fmT.stringWidth(label)) / 2, 30);
 
-                g2d.setFont(new Font("Serif", Font.ITALIC, 13));
+                g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.ITALIC, 13f));
                 FontMetrics fmD = g2d.getFontMetrics();
                 g2d.setColor(new Color(190, 180, 165));
                 g2d.drawString(desc, (getWidth() - fmD.stringWidth(desc)) / 2, 52);
@@ -448,12 +448,12 @@ public class MenuPanel extends JPanel {
         panel.add(Box.createRigidArea(new Dimension(0, 80)));
 
         JLabel title = new JLabel("SETTINGS & OPTIONS");
-        title.setFont(new Font("Georgia", Font.BOLD, 36)); title.setForeground(new Color(230, 200, 150));
+        title.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 36f)); title.setForeground(new Color(230, 200, 150));
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(title); panel.add(Box.createRigidArea(new Dimension(0, 50)));
 
         JLabel dLabel = new JLabel("✦ GRAPHICS & DISPLAY ✦");
-        dLabel.setFont(new Font("Serif", Font.BOLD, 18)); dLabel.setForeground(new Color(170, 150, 120));
+        dLabel.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 18f)); dLabel.setForeground(new Color(170, 150, 120));
         dLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(dLabel); panel.add(Box.createRigidArea(new Dimension(0, 20)));
 
@@ -471,7 +471,7 @@ public class MenuPanel extends JPanel {
         panel.add(hzP); panel.add(Box.createRigidArea(new Dimension(0, 50)));
 
         JLabel aLabel = new JLabel("✦ AUDIO & SOUND ✦");
-        aLabel.setFont(new Font("Serif", Font.BOLD, 18)); aLabel.setForeground(new Color(170, 150, 120));
+        aLabel.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 18f)); aLabel.setForeground(new Color(170, 150, 120));
         aLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(aLabel); panel.add(Box.createRigidArea(new Dimension(0, 20)));
 
@@ -486,7 +486,7 @@ public class MenuPanel extends JPanel {
 
     private JPanel createSettingRow(String labelText) {
         JPanel row = new JPanel(new BorderLayout()); row.setOpaque(false); row.setMaximumSize(new Dimension(550, 35));
-        JLabel label = new JLabel(labelText); label.setFont(new Font("Serif", Font.PLAIN, 18)); label.setForeground(Color.WHITE);
+        JLabel label = new JLabel(labelText); label.setFont(GameWindow.VIKING_FONT.deriveFont(Font.PLAIN, 18f)); label.setForeground(Color.WHITE);
         row.add(label, BorderLayout.WEST); return row;
     }
     private JSlider createStyledSlider(int def) {
@@ -497,7 +497,7 @@ public class MenuPanel extends JPanel {
         ((JLabel)r.getComponent(0)).setPreferredSize(new Dimension(250, 30)); return r;
     }
     private JComboBox<String> createStyledComboBox(String[] items) {
-        JComboBox<String> cb = new JComboBox<>(items); cb.setFont(new Font("Serif", Font.PLAIN, 16)); cb.setBackground(new Color(45, 15, 10)); cb.setForeground(Color.WHITE); cb.setBorder(BorderFactory.createLineBorder(new Color(130, 85, 45), 1)); cb.setPreferredSize(new Dimension(220, 30)); return cb;
+        JComboBox<String> cb = new JComboBox<>(items); cb.setFont(GameWindow.VIKING_FONT.deriveFont(Font.PLAIN, 16f)); cb.setBackground(new Color(45, 15, 10)); cb.setForeground(Color.WHITE); cb.setBorder(BorderFactory.createLineBorder(new Color(130, 85, 45), 1)); cb.setPreferredSize(new Dimension(220, 30)); return cb;
     }
 
     // --- FITUR BARU: Panah kecil pengapit teks menu yang lagi aktif/hover (gaya referensi) ---
@@ -546,7 +546,7 @@ public class MenuPanel extends JPanel {
                     g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 4, 4);
                     g2d.setColor(new Color(200, 200, 200));
                 }
-                g2d.setFont(new Font("Serif", Font.BOLD, 18));
+                g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 18f));
                 FontMetrics fm = g2d.getFontMetrics();
                 g2d.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2 + yOffset);
                 g2d.dispose();
@@ -581,7 +581,7 @@ public class MenuPanel extends JPanel {
 
                 if (active) {
                     // --- Item aktif: teks membesar, glow hangat, dikapit panah kiri-kanan ---
-                    Font font = new Font("Serif", Font.BOLD, 30);
+                    Font font = GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 30f);
                     g2d.setFont(font);
                     FontMetrics fm = g2d.getFontMetrics();
                     int textWidth = fm.stringWidth(getText());
@@ -610,7 +610,7 @@ public class MenuPanel extends JPanel {
                     g2d.drawString(getText(), cx - textWidth / 2, baselineY);
                 } else {
                     // --- Item tidak aktif: teks polos, kecil, tanpa kotak/background ---
-                    Font font = new Font("Serif", Font.PLAIN, 20);
+                    Font font = GameWindow.VIKING_FONT.deriveFont(Font.PLAIN, 20f);
                     g2d.setFont(font);
                     FontMetrics fm = g2d.getFontMetrics();
                     int textWidth = fm.stringWidth(getText());
@@ -850,13 +850,13 @@ public class MenuPanel extends JPanel {
 
         // 2. Render Judul Game jika tidak ada pop-up option/load
         if (!isOverlayOpen) {
-            g2d.setFont(new Font("Georgia", Font.BOLD, 68));
+            g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.BOLD, 68f));
             g2d.setColor(new Color(0, 0, 0, 80)); g2d.drawString("Heart&Horde", 85, 105);
             g2d.setColor(new Color(0, 0, 0, 200)); g2d.drawString("Heart&Horde", 82, 102);
             g2d.setPaint(new GradientPaint(80, 40, new Color(255, 252, 235), 80, 105, new Color(200, 160, 90)));
             g2d.drawString("Heart&Horde", 80, 100);
 
-            g2d.setFont(new Font("Georgia", Font.ITALIC, 28));
+            g2d.setFont(GameWindow.VIKING_FONT.deriveFont(Font.ITALIC, 28f));
             g2d.setColor(new Color(0, 0, 0, 200)); g2d.drawString("Bloodshed in Cryonia", 107, 142);
             g2d.setPaint(new GradientPaint(105, 120, new Color(220, 220, 220), 105, 145, new Color(150, 145, 140)));
             g2d.drawString("Bloodshed in Cryonia", 105, 140);
