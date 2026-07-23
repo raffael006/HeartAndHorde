@@ -9,7 +9,7 @@ public class GameWindow extends JFrame {
     public static Font VIKING_FONT;
     private static void loadCustomFont() {
         try {
-            VIKING_FONT = Font.createFont(Font.TRUETYPE_FONT, new File("assets/fonts/VidirT2-nLWP.ttf"));
+            VIKING_FONT = Font.createFont(Font.TRUETYPE_FONT, AssetPath.get("assets/fonts/VidirT2-nLWP.ttf"));
             GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(VIKING_FONT);
         } catch (Exception e) {
             System.out.println("Gagal load font Norse: " + e.getMessage());
@@ -50,7 +50,7 @@ public class GameWindow extends JFrame {
         // --- KODE IKON APLIKASI ---
         try {
             // Mengambil gambar langsung dari path relatif assets/img/
-            Image iconImage = new ImageIcon("assets/img/app_icon.png").getImage();
+            Image iconImage = new ImageIcon(AssetPath.getPath("assets/img/app_icon.png")).getImage();
             this.setIconImage(iconImage);
         } catch (Exception e) {
             System.out.println("Gagal load icon: " + e.getMessage());

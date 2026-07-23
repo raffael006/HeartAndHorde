@@ -63,7 +63,7 @@ public class MenuPanel extends JPanel {
         setLayout(null);
 
         try {
-            backgroundImage = ImageIO.read(new File("assets/img/background.png"));
+            backgroundImage = ImageIO.read(AssetPath.get("assets/img/background.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat background.png");
         }
@@ -163,7 +163,7 @@ public class MenuPanel extends JPanel {
             return;
         }
         try {
-            File musicPath = new File(filePath);
+            File musicPath = AssetPath.get(filePath);
             if (musicPath.exists()) {
                 AudioInputStream audioInput = AudioSystem.getAudioInputStream(musicPath);
                 backgroundMusic = AudioSystem.getClip();
@@ -177,7 +177,7 @@ public class MenuPanel extends JPanel {
 
     public void playHoverSound(String filePath) {
         try {
-            File sfxPath = new File(filePath);
+            File sfxPath = AssetPath.get(filePath);
             if (sfxPath.exists()) {
                 AudioInputStream audioInput = AudioSystem.getAudioInputStream(sfxPath);
                 Clip sfxClip = AudioSystem.getClip();

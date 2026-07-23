@@ -204,86 +204,86 @@ public class GamePanel extends JPanel {
         resetCampaign();
 
         try {
-            abandonedMineImg = ImageIO.read(new File("assets/img/abandoned_mine.png"));
-            builtMineImg = ImageIO.read(new File("assets/img/mine.png"));
+            abandonedMineImg = ImageIO.read(AssetPath.get("assets/img/abandoned_mine.png"));
+            builtMineImg = ImageIO.read(AssetPath.get("assets/img/mine.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat gambar Tambang!");
         }
 
         // 1. Muat Gambar (Menggunakan path src/ dan dipisah agar aman)
         try {
-            gameplayBg = ImageIO.read(new File("assets/img/GAMEBACKGROUND.png"));
-            treeImg = ImageIO.read(new File("assets/img/tree.png"));
+            gameplayBg = ImageIO.read(AssetPath.get("assets/img/GAMEBACKGROUND.png"));
+            treeImg = ImageIO.read(AssetPath.get("assets/img/tree.png"));
         } catch (Exception e) {}
 
         try {
             // Perbaikan: Tambahkan "assets/" dan sesuaikan nama file sm_house.png
-            smallHouseImg = ImageIO.read(new File("assets/img/smhouse.png"));
-            mediumHouseImg = ImageIO.read(new File("assets/img/mhouse.png"));
-            bigHouseImg = ImageIO.read(new File("assets/img/bighouse.png"));
-            farmImg = ImageIO.read(new File("assets/img/farm.png"));
-            storageImg = ImageIO.read(new File("assets/img/storage.png"));
-            barrackImg = ImageIO.read(new File("assets/img/barrack.png"));
-            underConstructionImg = ImageIO.read(new File("assets/img/building.png"));
+            smallHouseImg = ImageIO.read(AssetPath.get("assets/img/smhouse.png"));
+            mediumHouseImg = ImageIO.read(AssetPath.get("assets/img/mhouse.png"));
+            bigHouseImg = ImageIO.read(AssetPath.get("assets/img/bighouse.png"));
+            farmImg = ImageIO.read(AssetPath.get("assets/img/farm.png"));
+            storageImg = ImageIO.read(AssetPath.get("assets/img/storage.png"));
+            barrackImg = ImageIO.read(AssetPath.get("assets/img/barrack.png"));
+            underConstructionImg = ImageIO.read(AssetPath.get("assets/img/building.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Gambar Rumah!");
         }
 
         try {
-            heartImg = ImageIO.read(new File("assets/img/Heart.png"));
+            heartImg = ImageIO.read(AssetPath.get("assets/img/Heart.png"));
             System.out.println(heartImg);
         } catch (Exception e) {
             System.out.println("Gagal memuat Heart!");
         }
 
         try {
-            archerImg = ImageIO.read(new File("assets/img/Hearthguardbow.png"));
-            spearmanImg = ImageIO.read(new File("assets/img/hearthguard_spier.png"));
+            archerImg = ImageIO.read(AssetPath.get("assets/img/Hearthguardbow.png"));
+            spearmanImg = ImageIO.read(AssetPath.get("assets/img/hearthguard_spier.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Pasukan Guard!");
         }
 
         try {
-            axemanImg = ImageIO.read(new File("assets/img/1Horde.png"));
-            shieldImg = ImageIO.read(new File("assets/img/2Horde.png"));
-            bowmanHordeImg = ImageIO.read(new File("assets/img/3Horde.png"));
-            bearImg = ImageIO.read(new File("assets/img/Bear_Horde.png"));
-            twoAxeImg = ImageIO.read(new File("assets/img/Horde_2axe.png"));
-            logHordeImg = ImageIO.read(new File("assets/img/Log_horde.png"));
-            sorcererImg = ImageIO.read(new File("assets/img/sorcerer_Horde.png"));
+            axemanImg = ImageIO.read(AssetPath.get("assets/img/1Horde.png"));
+            shieldImg = ImageIO.read(AssetPath.get("assets/img/2Horde.png"));
+            bowmanHordeImg = ImageIO.read(AssetPath.get("assets/img/3Horde.png"));
+            bearImg = ImageIO.read(AssetPath.get("assets/img/Bear_Horde.png"));
+            twoAxeImg = ImageIO.read(AssetPath.get("assets/img/Horde_2axe.png"));
+            logHordeImg = ImageIO.read(AssetPath.get("assets/img/Log_horde.png"));
+            sorcererImg = ImageIO.read(AssetPath.get("assets/img/sorcerer_Horde.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Pasukan Horde!");
         }
 
         try {
-            civilImg = ImageIO.read(new File("assets/img/civil_h&h.png"));
-            civilBuilderImg = ImageIO.read(new File("assets/img/Civil_Builder.png"));
+            civilImg = ImageIO.read(AssetPath.get("assets/img/civil_h&h.png"));
+            civilBuilderImg = ImageIO.read(AssetPath.get("assets/img/Civil_Builder.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Civil!");
         }
 
         try {
-            iconMilitary = ImageIO.read(new File("assets/img/Military-removebg-preview.png"));
-            iconWave = ImageIO.read(new File("assets/img/Wafe-removebg-preview.png"));
-            iconStone = ImageIO.read(new File("assets/img/Stone-removebg-preview.png"));
-            iconWood = ImageIO.read(new File("assets/img/Wood-removebg-preview.png"));
-            iconSteel = ImageIO.read(new File("assets/img/Steel-removebg-preview.png"));
-            iconFood = ImageIO.read(new File("assets/img/food-removebg-preview.png"));
-            iconCivil = ImageIO.read(new File("assets/img/Civil-removebg-preview.png"));
+            iconMilitary = ImageIO.read(AssetPath.get("assets/img/Military-removebg-preview.png"));
+            iconWave = ImageIO.read(AssetPath.get("assets/img/Wafe-removebg-preview.png"));
+            iconStone = ImageIO.read(AssetPath.get("assets/img/Stone-removebg-preview.png"));
+            iconWood = ImageIO.read(AssetPath.get("assets/img/Wood-removebg-preview.png"));
+            iconSteel = ImageIO.read(AssetPath.get("assets/img/Steel-removebg-preview.png"));
+            iconFood = ImageIO.read(AssetPath.get("assets/img/food-removebg-preview.png"));
+            iconCivil = ImageIO.read(AssetPath.get("assets/img/Civil-removebg-preview.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat icon resource bar!");
         }
 
         try {
-            wallLeftImg = ImageIO.read(new File("assets/img/woodenWall_L.png"));
-            wallRightImg = ImageIO.read(new File("assets/img/woodenWall_R.png"));
-            wallUDImg = ImageIO.read(new File("assets/img/WoodenWall_UD.png"));
+            wallLeftImg = ImageIO.read(AssetPath.get("assets/img/woodenWall_L.png"));
+            wallRightImg = ImageIO.read(AssetPath.get("assets/img/woodenWall_R.png"));
+            wallUDImg = ImageIO.read(AssetPath.get("assets/img/WoodenWall_UD.png"));
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         try{
-            builderImg = ImageIO.read(new File("assets/img/builder.png"));
+            builderImg = ImageIO.read(AssetPath.get("assets/img/builder.png"));
         } catch (Exception e) {
             e.printStackTrace();
         }
