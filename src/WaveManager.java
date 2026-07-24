@@ -1,6 +1,8 @@
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import javax.sound.sampled.*;
+import java.io.File;
 
 /**
  * ADT untuk sistem wave Horde per difficulty (Easy/Medium/Hard).
@@ -73,6 +75,9 @@ public class WaveManager {
     // Men-spawn seluruh Horde untuk wave ke-(waveIdx+1) PERSIS sesuai urutan, jenis, & arah
     // yang ditulis di DifficultyConfig, lalu Horde-nya maju menyerbu Heart/pemain seperti biasa.
     private void spawnWave(int waveIdx, GameWindow window) {
+        // --- FITUR BARU: bunyiin tanduk perang persis pas wave baru mulai muncul ---
+        playSound("Assets/music/wavehornhorde.wav");
+
         List<DifficultyConfig.WaveData> waves = DifficultyConfig.getWaves(currentDifficulty);
         if (waveIdx >= waves.size()) return; // jaga-jaga kalau DifficultyConfig diisi kurang dari MAX_WAVE
         DifficultyConfig.WaveData waveData = waves.get(waveIdx);
@@ -112,6 +117,33 @@ public class WaveManager {
 
         System.out.println("Wave " + WAVE_ROMAN[waveIdx] + " (" + currentDifficulty + ") spawn: "
                 + waveData.hordes.size() + " Horde (hardcoded dari DifficultyConfig, bukan random)");
+    }
+
+    // --- FITUR BARU: pemutar SFX pendek (WAV) buat tanduk perang tiap wave mulai. ---
+    // Dijalankan di thread terpisah biar (1) game loop utama gak ke-block nunggu file
+    // audio-nya kebuka/kelar, dan (2) kalau kepanggil beruntun suaranya boleh overlap,
+    // bukan nunggu antre. Gagal muter (file gak ada/format salah) cuma nge-print log,
+    // gak sampai bikin game crash.
+    private void playSound(String filePath) {
+        new Thread(() -> {
+            try {
+                File file = new File(filePath);
+                AudioInputStream audioStream = AudioSystem.getAudioInputStream(file);
+                Clip clip = AudioSystem.getClip();
+                clip.open(audioStream);
+                clip.start();
+
+                // Tutup Clip & stream-nya sendiri begitu selesai muter, biar resource-nya gak numpuk/leak
+                clip.addLineListener(event -> {
+                    if (event.getType() == LineEvent.Type.STOP) {
+                        clip.close();
+                        try { audioStream.close(); } catch (Exception ignored) {}
+                    }
+                });
+            } catch (Exception e) {
+                System.out.println("Gagal muter suara '" + filePath + "': " + e.getMessage());
+            }
+        }).start();
     }
 
     // --- Getter untuk dibaca HUD/UI (GamePanel), state tetap hanya diubah lewat reset()/tick() ---

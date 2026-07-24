@@ -141,6 +141,92 @@ public class GridButtonFactory {
         return btn;
     }
 
+    // --- FITUR BARU: Varian createGridBtnBuilding buat building yang cost-nya lebih dari sekadar wood
+    // (mis. Archer Tower: wood + stone + civil). Badge cost jadi bertumpuk 1 baris per resource yang
+    // cost-nya > 0 -- kalau cuma wood, tampilannya identik sama varian lama (createGridBtnBuilding 6-arg). ---
+    public static JButton createGridBtnBuilding(BufferedImage img, int woodCost, int stoneCost, int civilCost,
+                                                ResourceManager resourceManager, int availableCivilCount,
+                                                BufferedImage iconWood, BufferedImage iconStone, BufferedImage iconCivil,
+                                                Runnable action, boolean isSelected) {
+        JButton btn = new JButton() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // Dihitung ulang tiap repaint (bukan sekali pas tombol dibuat), sama kayak varian aslinya,
+                // supaya warnanya real-time ikut resourceManager & jumlah Civil yang sekarang.
+                boolean canAffordWood = resourceManager.wood >= woodCost;
+                boolean canAffordStone = resourceManager.stone >= stoneCost;
+                boolean canAffordCivil = availableCivilCount >= civilCost;
+                boolean canAffordAll = canAffordWood && canAffordStone && canAffordCivil;
+
+                if (isSelected || getModel().isRollover()) {
+                    g2d.setColor(new Color(15, 12, 10));
+                } else {
+                    g2d.setColor(new Color(40, 35, 30));
+                }
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(new Color(80, 60, 35));
+                g2d.drawRect(0, 0, getWidth(), getHeight());
+
+                int w = getWidth(), h = getHeight();
+
+                // Wood selalu ditampilkan (baris pertama); Stone & Civil cuma nongol kalau cost-nya > 0
+                int rowH = 14;
+                int rowCount = 1 + (stoneCost > 0 ? 1 : 0) + (civilCost > 0 ? 1 : 0);
+                int badgeAreaH = rowCount * rowH;
+
+                if (img != null) {
+                    int imgSize = Math.min(w - 12, h - 12 - (badgeAreaH - rowH));
+                    int imgX = (w - imgSize) / 2;
+                    int imgY = 2;
+
+                    if (!canAffordAll) {
+                        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f));
+                    }
+                    g2d.drawImage(img, imgX, imgY, imgSize, imgSize, null);
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                }
+
+                g2d.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                int rowY = h - badgeAreaH;
+
+                // --- Baris Wood ---
+                g2d.setColor(new Color(0, 0, 0, 180));
+                g2d.fillRect(0, rowY, w, rowH);
+                if (iconWood != null) g2d.drawImage(iconWood, 3, rowY + 1, 12, 12, null);
+                g2d.setColor(canAffordWood ? new Color(90, 220, 90) : new Color(230, 90, 90));
+                g2d.drawString(String.valueOf(woodCost), 18, rowY + 11);
+                rowY += rowH;
+
+                // --- Baris Stone (cuma kalau dibutuhkan) ---
+                if (stoneCost > 0) {
+                    g2d.setColor(new Color(0, 0, 0, 180));
+                    g2d.fillRect(0, rowY, w, rowH);
+                    if (iconStone != null) g2d.drawImage(iconStone, 3, rowY + 1, 12, 12, null);
+                    g2d.setColor(canAffordStone ? new Color(90, 220, 90) : new Color(230, 90, 90));
+                    g2d.drawString(String.valueOf(stoneCost), 18, rowY + 11);
+                    rowY += rowH;
+                }
+
+                // --- Baris Civil (cuma kalau dibutuhkan) ---
+                if (civilCost > 0) {
+                    g2d.setColor(new Color(0, 0, 0, 180));
+                    g2d.fillRect(0, rowY, w, rowH);
+                    if (iconCivil != null) g2d.drawImage(iconCivil, 3, rowY + 1, 12, 12, null);
+                    g2d.setColor(canAffordCivil ? new Color(90, 220, 90) : new Color(230, 90, 90));
+                    g2d.drawString(String.valueOf(civilCost), 18, rowY + 11);
+                }
+
+                g2d.dispose();
+            }
+        };
+        btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+        if (action != null) btn.addActionListener(e -> action.run());
+        return btn;
+    }
+
     // Teks putih kalau cukup, merah kalau 0 (tidak bisa rekrut)
     public static JPanel createCivilCountDisplay(GameWindow window) {
         return new JPanel() {

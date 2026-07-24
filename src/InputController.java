@@ -335,12 +335,29 @@ public class InputController {
                         gp.dragCurrentPoint.y = targetY;
 
                     } else {
-                        // --- TAMBAHAN KODE: CEK DAN KURANGI COST KAYU ---
-                        int cost = Building.getWoodCost(gp.selectedBuilding);
-                        // --- DEV MODE: gratis, skip cek kayu ---
-                        if (gp.isCheatModeActive || gp.resourceManager.wood >= cost) {
+                        // --- FITUR BARU: cek & bayar wood + stone + civil sekaligus (dulunya cuma wood) ---
+                        // Building lama (Farm, House, dll) stone/civil cost-nya 0 dari Building.java,
+                        // jadi behavior-nya sama persis kayak sebelumnya buat mereka -- cuma Archer Tower
+                        // yang beneran kepotong stone & civil-nya.
+                        int woodCost = Building.getWoodCost(gp.selectedBuilding);
+                        int stoneCost = Building.getStoneCost(gp.selectedBuilding);
+                        int civilCost = Building.getCivilCost(gp.selectedBuilding);
+
+                        boolean enoughWood = gp.isCheatModeActive || gp.resourceManager.wood >= woodCost;
+                        boolean enoughStone = gp.isCheatModeActive || gp.resourceManager.stone >= stoneCost;
+                        boolean enoughCivilPool = gp.isCheatModeActive || gp.window.activeCivils.size() >= civilCost;
+
+                        // --- DEV MODE: gratis, skip semua cek ---
+                        if (enoughWood && enoughStone && enoughCivilPool) {
                             if (!gp.isOverlapping(newArea, null) && !gp.isTreeBlocking(newArea)) {
-                                if (!gp.isCheatModeActive) gp.resourceManager.wood -= cost; // Bayar kayunya (hanya kalau bukan dev mode)
+                                if (!gp.isCheatModeActive) {
+                                    gp.resourceManager.wood -= woodCost;   // Bayar kayunya
+                                    gp.resourceManager.stone -= stoneCost; // Bayar batunya
+                                    // "Korbankan" civil idle sejumlah civilCost (dipakai buat Archer Tower)
+                                    for (int i = 0; i < civilCost && !gp.window.activeCivils.isEmpty(); i++) {
+                                        gp.window.activeCivils.remove(gp.window.activeCivils.size() - 1);
+                                    }
+                                }
 
                                 int cap = gp.getBuildCapacity(gp.selectedBuilding);
                                 Building newBuilding = new Building(targetX, targetY, bw, bw, gp.selectedBuilding, cap);
@@ -354,6 +371,9 @@ public class InputController {
                                     for (int i = 0; i < cap; i++) {
                                         gp.window.activeCivilBuilders.add(new CivilBuilder(spawnPointX, spawnPointY, newBuilding));
                                     }
+                                } else if (gp.selectedBuilding == Building.BuildingType.ARCHER_TOWER) {
+                                    // --- FITUR BARU: Archer Tower nembak sendiri, gak butuh occupant Civil
+                                    // kayak House (cap-nya emang 0 di getBuildCapacity, ini cuma dokumentasi) ---
                                 } else {
                                     for (int i = 0; i < cap; i++) {
                                         // --- FITUR BARU: Civil dikasih tau rumah asalnya (newBuilding) biar bisa kabur pulang ---
@@ -366,7 +386,7 @@ public class InputController {
                                 }
                             }
                         } else {
-                            System.out.println("Kayu tidak cukup untuk membangun!");
+                            System.out.println("Resource tidak cukup untuk membangun!");
                         }
                     }
                 }
@@ -499,7 +519,6 @@ public class InputController {
             boolean isSmall = (gp.selectedBuilding == Building.BuildingType.SMALL_HOUSE);
             boolean isMed = (gp.selectedBuilding == Building.BuildingType.MEDIUM_HOUSE);
             boolean isBig = (gp.selectedBuilding == Building.BuildingType.BIG_HOUSE);
-            boolean isWall = (gp.selectedBuilding == Building.BuildingType.WALL_L);
             boolean isChop = (gp.currentTool == GamePanel.ToolMode.CHOP_WOOD);
             boolean isFarm = (gp.selectedBuilding == Building.BuildingType.FARM);
             boolean isStorage = (gp.selectedBuilding == Building.BuildingType.STORAGE);
@@ -510,12 +529,6 @@ public class InputController {
             gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.SMALL_HOUSE, () -> { gp.selectedBuilding = Building.BuildingType.SMALL_HOUSE; gp.currentTool = GamePanel.ToolMode.BUILD; updateGridMenu(); gp.repaint(); }, isSmall));
             gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.MEDIUM_HOUSE, () -> { gp.selectedBuilding = Building.BuildingType.MEDIUM_HOUSE; gp.currentTool = GamePanel.ToolMode.BUILD; updateGridMenu(); gp.repaint(); }, isMed));
             gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.BIG_HOUSE, () -> { gp.selectedBuilding = Building.BuildingType.BIG_HOUSE; gp.currentTool = GamePanel.ToolMode.BUILD; updateGridMenu(); gp.repaint(); }, isBig));
-            gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.WALL_L, () -> {
-                gp.selectedBuilding = Building.BuildingType.WALL_L; // Jadikan L sebagai default/pancingan awal
-                gp.currentTool = GamePanel.ToolMode.BUILD;
-                updateGridMenu();
-                gp.repaint();
-            }, isWall));
             gp.gridMenuPanel.add(gp.createGridBtn("🪓", () -> {
                 gp.currentTool = GamePanel.ToolMode.CHOP_WOOD;
                 updateGridMenu();
@@ -530,11 +543,13 @@ public class InputController {
                 gp.repaint();
             }, isBuilderSel));
 
-            for(int i=0; i<6; i++) gp.gridMenuPanel.add(gp.createGridBtn("", null, false));
+            for(int i=0; i<7; i++) gp.gridMenuPanel.add(gp.createGridBtn("", null, false));
             gp.gridMenuPanel.add(gp.createGridBtn("⬅️", () -> { gp.currentMenuState = GamePanel.MenuState.MAIN_MENU; updateGridMenu(); }, false));
         }
         else if (gp.currentMenuState == GamePanel.MenuState.MILITARY_MENU) {
             boolean isBarrack = (gp.selectedBuilding == Building.BuildingType.BARRACK);
+            boolean isWall = (gp.selectedBuilding == Building.BuildingType.WALL_L);
+            boolean isArcherTower = (gp.selectedBuilding == Building.BuildingType.ARCHER_TOWER);
 
             // Tambahkan tombol Barrack (sekarang pakai gambar sprite asli)
             gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.BARRACK, () -> {
@@ -544,8 +559,24 @@ public class InputController {
                 gp.repaint();
             }, isBarrack));
 
-            // Isi sisa 10 kotak kosong dan 1 tombol kembali
-            for(int i=0; i<10; i++) gp.gridMenuPanel.add(gp.createGridBtn("", null, false));
+            // --- FITUR BARU: Wall dipindah kesini dari CIVIL_MENU (satu tempat sama unit/bangunan militer) ---
+            gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.WALL_L, () -> {
+                gp.selectedBuilding = Building.BuildingType.WALL_L; // Jadikan L sebagai default/pancingan awal
+                gp.currentTool = GamePanel.ToolMode.BUILD;
+                updateGridMenu();
+                gp.repaint();
+            }, isWall));
+
+            // --- FITUR BARU: Tombol Archer Tower (cost wood+stone+civil, nembak sendiri, hancur -> 4 Guard Bow) ---
+            gp.gridMenuPanel.add(gp.createGridBtnBuilding(Building.BuildingType.ARCHER_TOWER, () -> {
+                gp.selectedBuilding = Building.BuildingType.ARCHER_TOWER;
+                gp.currentTool = GamePanel.ToolMode.BUILD;
+                updateGridMenu();
+                gp.repaint();
+            }, isArcherTower));
+
+            // Isi sisa 8 kotak kosong dan 1 tombol kembali
+            for(int i=0; i<8; i++) gp.gridMenuPanel.add(gp.createGridBtn("", null, false));
             gp.gridMenuPanel.add(gp.createGridBtn("⬅️", () -> { gp.currentMenuState = GamePanel.MenuState.MAIN_MENU; updateGridMenu(); }, false));
         }
 
@@ -553,10 +584,8 @@ public class InputController {
             // --- FITUR BARU: Heart tidak boleh dipindah maupun dihancurkan ---
             boolean isHeart = gp.clickedBuilding != null && gp.clickedBuilding.type == Building.BuildingType.HEART;
 
-            // 1. Tombol UPGRADE (Sementara cuma print log)
-            gp.gridMenuPanel.add(gp.createGridBtn("⬆️", () -> {
-                System.out.println("Fitur Upgrade akan segera hadir!");
-            }, false));
+            // --- FITUR BARU: Tombol Upgrade dihapus (dulu cuma println, gak fungsi beneran) ---
+            gp.gridMenuPanel.add(gp.createGridBtn("", null, false));
 
             // 2. Tombol MOVE (Angkat bangunan) - disembunyikan kalau Heart
             if (isHeart) {

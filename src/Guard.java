@@ -233,7 +233,14 @@ public class Guard implements Serializable {
             }
 
             if (targetEnemy != null) {
-                if (minDistance <= attackRangePanah) {
+                // FIX: kalau lagi jalan karena perintah manual (klik kanan) dari pemain, jangan
+                // langsung dibajak balik ke DEFENDING tiap tick cuma gara-gara ada musuh dalam
+                // jangkauan -- sebelumnya baris ini jalan TANPA peduli state, jadi perintah
+                // "jalan"/retreat dari pemain ke-overwrite lagi di frame berikutnya selama musuh
+                // masih di jangkauan (guard-nya keliatan gak bisa digerakin sama sekali pas lagi
+                // diserang). Sekarang perintah jalan dihormati sampai guard-nya beneran nyampe
+                // tujuan (otomatis balik ke IDLE), baru combat auto-lock aktif lagi.
+                if (minDistance <= attackRangePanah && state != GuardState.MOVING) {
                     // --- FIX: begitu masuk jarak tembak, LANGSUNG berhenti di tempat &
                     // mulai nembak dari situ -- gak perlu nunggu sampai titik tujuan klik
                     // dulu. State diubah dari MOVING jadi DEFENDING supaya bagian
@@ -262,7 +269,12 @@ public class Guard implements Serializable {
         } else if (type == GuardType.SPEARMAN) {
             double attackRangeMelee = size + 5;
             Horde targetEnemyMelee = null;
-            double minDistanceMelee = sightRange;
+            // FIX: sama kayak Archer -- sightRange (200) lebih kecil dari jarak tembak Horde
+            // Bowman (250), jadi kalau Bowman nongkrong di jarak 200-250, Spearman kena panah
+            // terus tapi gak pernah "sadar" ada musuh (di luar radius deteksinya) -> keliatan
+            // diem aja padahal lagi diserang. Dipatok ke yang lebih jauh biar Spearman selalu
+            // bisa notice & samperin musuh yang emang udah dalam jangkauan tembak mereka.
+            double minDistanceMelee = Math.max(sightRange, 250.0);
 
             for (Horde enemy : allHordes) {
                 double dx = this.x - enemy.x;
@@ -284,7 +296,9 @@ public class Guard implements Serializable {
             }
 
             if (targetEnemyMelee != null) {
-                if (minDistanceMelee <= attackRangeMelee) {
+                // FIX: sama kayak Archer -- hormati perintah jalan manual yang lagi berlangsung,
+                // jangan langsung dibajak balik ke DEFENDING tiap tick.
+                if (minDistanceMelee <= attackRangeMelee && state != GuardState.MOVING) {
                     // --- FIX: sama seperti Archer -- begitu masuk jarak pukul, berhenti
                     // di tempat (bukan lagi MOVING) baru menyerang, gak nyerobot nyerang
                     // sambil tetap "dianggap" jalan menuju titik klik.

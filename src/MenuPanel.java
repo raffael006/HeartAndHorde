@@ -308,7 +308,7 @@ public class MenuPanel extends JPanel {
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setOpaque(false);
 
-        String[] menuItems = {"CONTINUE", "CAMPAIGN", "OPTIONS", "EXTRAS", "QUIT"};
+        String[] menuItems = {"CONTINUE", "CAMPAIGN", "OPTIONS", "QUIT"};
         for (String item : menuItems) {
             panel.add(createMenuButton(item));
             panel.add(Box.createRigidArea(new Dimension(0, 6)));

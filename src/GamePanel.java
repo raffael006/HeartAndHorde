@@ -30,6 +30,7 @@ public class GamePanel extends JPanel {
     private BufferedImage farmImg;
     private BufferedImage storageImg;
     private BufferedImage barrackImg;
+    private BufferedImage archerTowerImg;
     private BufferedImage underConstructionImg;
     private BufferedImage heartImg;
     private BufferedImage builderImg;
@@ -243,6 +244,7 @@ public class GamePanel extends JPanel {
             farmImg = ImageIO.read(new File("assets/img/farm.png"));
             storageImg = ImageIO.read(new File("assets/img/storage.png"));
             barrackImg = ImageIO.read(new File("assets/img/barrack.png"));
+            archerTowerImg = ImageIO.read(new File("assets/img/archerTower.png"));
             underConstructionImg = ImageIO.read(new File("assets/img/building.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Gambar Rumah!");
@@ -340,6 +342,41 @@ public class GamePanel extends JPanel {
                 if (barrackQueuePanel != null && barrackQueuePanel.isVisible()) barrackQueuePanel.repaint();
                 // --- FITUR BARU: Refresh panel info bangunan kalau lagi terbuka (HP/penghuni real-time) ---
                 if (buildingInfoPanel != null && buildingInfoPanel.isVisible()) buildingInfoPanel.repaint();
+
+                // --- FITUR BARU: ARCHER TOWER nembak sendiri (4 archer di atasnya, independen dari Guard) ---
+                for (Building tower : window.savedBuildings) {
+                    if (!tower.isBuilt || tower.isDemolishing || tower.currentHp <= 0) continue;
+                    if (tower.type != Building.BuildingType.ARCHER_TOWER) continue;
+
+                    long towerCooldown = Building.getTowerCooldown(tower.type);
+                    if (System.currentTimeMillis() - tower.lastAttackTime < towerCooldown) continue;
+
+                    double towerRange = Building.getTowerRange(tower.type);
+                    double towerDamage = Building.getTowerDamage(tower.type);
+                    int arrowCount = Building.getTowerArrowCount(tower.type);
+
+                    double towerX = tower.getRangedAttackOrigin().x;
+                    double towerY = tower.getRangedAttackOrigin().y;
+
+                    // Kumpulin Horde yang masih dalam jangkauan, urutin dari yang paling deket
+                    // -> biar tiap archer (sampe 4) nembak target BEDA-BEDA, bukan numpuk 1 target
+                    List<Horde> targetsInRange = new java.util.ArrayList<>();
+                    for (Horde h : window.activeHordes) {
+                        double dist = Math.hypot(towerX - h.x, towerY - h.y);
+                        if (dist <= towerRange) targetsInRange.add(h);
+                    }
+                    targetsInRange.sort((h1, h2) -> Double.compare(
+                            Math.hypot(towerX - h1.x, towerY - h1.y),
+                            Math.hypot(towerX - h2.x, towerY - h2.y)));
+
+                    int fired = 0;
+                    for (Horde h : targetsInRange) {
+                        if (fired >= arrowCount) break;
+                        window.activeProjectiles.add(new Projectile(towerX, towerY, h.x, h.y, true, towerDamage));
+                        fired++;
+                    }
+                    if (fired > 0) tower.lastAttackTime = System.currentTimeMillis();
+                }
 
                 // 1. Update Guards (Parameter Nambah)
                 for (Guard g : window.activeGuards) {
@@ -629,16 +666,23 @@ public class GamePanel extends JPanel {
                     // Tiap pagi, rumah yang masih punya slot kosong (occupants < maxCapacity)
                     // kedatangan 1 penghuni baru -- bukan langsung penuh sekaligus, biar berasa
                     // bertumbuh pelan-pelan tiap hari, bukan instan.
+                    // FITUR BARU: tiap villager baru butuh 1 Food buat "lahir". Kalau food gak
+                    // cukup, rumah itu skip dulu pagi ini (dicoba lagi pagi berikutnya).
                     for (Building b : window.savedBuildings) {
                         boolean isHouse = b.isBuilt && (b.type == Building.BuildingType.SMALL_HOUSE
                                 || b.type == Building.BuildingType.MEDIUM_HOUSE
                                 || b.type == Building.BuildingType.BIG_HOUSE);
                         if (isHouse && b.occupants.size() < b.maxCapacity) {
-                            double spawnX = b.getBounds().getCenterX();
-                            double spawnY = b.getBounds().getCenterY();
-                            Civil newborn = new Civil(spawnX, spawnY, b);
-                            window.activeCivils.add(newborn);
-                            b.enterBuilding(newborn);
+                            boolean cukupFood = isCheatModeActive || resourceManager.food >= 1;
+                            if (cukupFood) {
+                                if (!isCheatModeActive) resourceManager.food -= 1; // Bayar 1 Food per villager baru
+
+                                double spawnX = b.getBounds().getCenterX();
+                                double spawnY = b.getBounds().getCenterY();
+                                Civil newborn = new Civil(spawnX, spawnY, b);
+                                window.activeCivils.add(newborn);
+                                b.enterBuilding(newborn);
+                            }
                         }
                     }
                 }
@@ -747,6 +791,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.SMALL_HOUSE) return 70;
         if (type == Building.BuildingType.BIG_HOUSE) return 90;
         if (type == Building.BuildingType.BUILDER) return 50;
+        if (type == Building.BuildingType.ARCHER_TOWER) return 48; // Samain sama visual width barunya
         return 70;
     }
 
@@ -755,6 +800,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.FARM) return 0;    // Farm tempat kerja, bukan tempat tinggal -> tidak spawn Civil
         if (type == Building.BuildingType.STORAGE) return 0; // Storage cuma gudang -> tidak spawn Civil
         if (type == Building.BuildingType.BARRACK) return 0; // Barrack tidak spawn Civil -> Guard diproduksi manual via menu ➕
+        if (type == Building.BuildingType.ARCHER_TOWER) return 0; // Nembak sendiri, gak butuh occupant Civil
         if (type == Building.BuildingType.SMALL_HOUSE) return 2;
         if (type == Building.BuildingType.BIG_HOUSE) return 8;
         if (type == Building.BuildingType.BUILDER) return 2;
@@ -770,6 +816,7 @@ public class GamePanel extends JPanel {
         if (type == Building.BuildingType.FARM) return farmImg;
         if (type == Building.BuildingType.STORAGE) return storageImg;
         if (type == Building.BuildingType.BARRACK) return barrackImg;
+        if (type == Building.BuildingType.ARCHER_TOWER) return archerTowerImg;
         if (type == Building.BuildingType.HEART) return heartImg;
         if (type == Building.BuildingType.BUILDER) return builderImg;
         return mediumHouseImg;
@@ -794,8 +841,18 @@ public class GamePanel extends JPanel {
 
     JButton createGridBtnBuilding(Building.BuildingType type, Runnable action, boolean isSelected) {
         BufferedImage img = getBuildImage(type);
-        int cost = Building.getWoodCost(type);
-        return GridButtonFactory.createGridBtnBuilding(img, cost, resourceManager, iconWood, action, isSelected);
+        int woodCost = Building.getWoodCost(type);
+        int stoneCost = Building.getStoneCost(type);
+        int civilCost = Building.getCivilCost(type);
+
+        // --- FITUR BARU: building yang cost-nya lebih dari sekadar wood (mis. Archer Tower: wood+stone+civil)
+        // pakai badge multi-resource. Building lama (cost wood doang) tetap pakai badge asli, gak berubah. ---
+        if (stoneCost > 0 || civilCost > 0) {
+            return GridButtonFactory.createGridBtnBuilding(img, woodCost, stoneCost, civilCost,
+                    resourceManager, window.activeCivils.size(),
+                    iconWood, iconStone, iconCivil, action, isSelected);
+        }
+        return GridButtonFactory.createGridBtnBuilding(img, woodCost, resourceManager, iconWood, action, isSelected);
     }
 
     JPanel createCivilCountDisplay() {

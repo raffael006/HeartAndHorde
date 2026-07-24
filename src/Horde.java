@@ -606,6 +606,15 @@ public class Horde implements Serializable {
                     forcedWallTarget = null;
                 }
 
+                // --- FITUR BARU: PATH SIMPLIFICATION ("string pulling") ---
+                // Jalur A* mentah nempel di titik-titik grid tiap 20px, jadi walau tujuannya
+                // lurus, horde-nya jalan belok-belok kecil ngikutin kotak grid -> keliatan
+                // ragu-ragu/gak yakin padahal sebenernya bukan salah arah. Di sini jalur itu
+                // "dipotong": kalau dari 1 titik bisa lihat langsung (garis bersih) ke titik lain
+                // yang lebih jauh di depan, titik-titik di antaranya diskip -> hasilnya horde
+                // jalan lurus tegas di area terbuka, dan cuma belok beneran pas emang kehalang.
+                newPath = simplifyPath(newPath, allBuildings);
+
                 path = newPath;
                 pathIndex = 0;
             }
@@ -660,6 +669,35 @@ public class Horde implements Serializable {
             }
         }
         return true;
+    }
+
+    // --- FITUR BARU: "String pulling" -- rapikan jalur A* mentah biar gak nempel grid ---
+    // Algoritma greedy: dari tiap titik, coba lompat langsung ke titik TERJAUH di depan yang
+    // masih punya garis pandang bersih (hasClearLine), skip semua titik grid di antaranya.
+    // Kalau gak ketemu (kehalang terus), baru maju 1 titik seperti biasa. Hasilnya jalur jauh
+    // lebih sedikit titik & lebih lurus di area terbuka, tapi tetap ngindarin bangunan persis
+    // seperti jalur A* aslinya di area yang emang sempit/berkelok.
+    private List<Point> simplifyPath(List<Point> rawPath, List<Building> buildings) {
+        if (rawPath == null || rawPath.size() <= 2) return rawPath;
+
+        List<Point> simplified = new java.util.ArrayList<>();
+        int i = 0;
+        simplified.add(rawPath.get(i));
+
+        while (i < rawPath.size() - 1) {
+            int farthest = i + 1; // Fallback: minimal maju 1 titik biasa
+            for (int j = rawPath.size() - 1; j > i + 1; j--) {
+                Point from = rawPath.get(i);
+                Point to = rawPath.get(j);
+                if (hasClearLine(from.x, from.y, to.x, to.y, buildings)) {
+                    farthest = j;
+                    break;
+                }
+            }
+            simplified.add(rawPath.get(farthest));
+            i = farthest;
+        }
+        return simplified;
     }
 
     // --- FITUR BARU: Cari Wall terdekat yang beneran bisa dijangkau (path-nya gak kosong) ---

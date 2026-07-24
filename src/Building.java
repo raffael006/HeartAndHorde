@@ -1,4 +1,5 @@
 import java.awt.*;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -34,6 +35,9 @@ public class Building implements Serializable {
     // --- FITUR BARU: FLASH PUTIH pas Building kena hit ---
     public long lastHitTime = -999999;
     private static final long HIT_FLASH_DURATION = 110; // ms
+
+    // --- FITUR BARU: cooldown serangan buat building yang bisa nembak sendiri (Archer Tower) ---
+    public long lastAttackTime = 0;
 
     public Building(int x, int y, int width, int height, BuildingType type, int capacity) {
         this.bounds = new Rectangle(x, y, width, height);
@@ -149,7 +153,7 @@ public class Building implements Serializable {
         if (type == BuildingType.STORAGE) return 70; // Sesuaikan lebar storage.png
         if (type == BuildingType.BARRACK) return 114; // Sesuaikan lebar barrack.png
         if (type == BuildingType.BUILDER) return 35;   // di getVisualWidth
-        if (type == BuildingType.ARCHER_TOWER) return 70; // Scaled down dari archerTower.png asli (320x670)
+        if (type == BuildingType.ARCHER_TOWER) return 48; // Diperkecil dari 70 -> lebih proporsional ke building lain
 
         return 70;
     }
@@ -165,7 +169,7 @@ public class Building implements Serializable {
         if (type == BuildingType.STORAGE) return 45; // Sesuaikan tinggi storage.png
         if (type == BuildingType.BARRACK) return 71;
         if (type == BuildingType.BUILDER) return 35;   // di getVisualHeight
-        if (type == BuildingType.ARCHER_TOWER) return 145; // Scaled down dari archerTower.png asli (320x670)
+        if (type == BuildingType.ARCHER_TOWER) return 100; // Diperkecil dari 145 -> rasio tetep ~320:670
         return 70;
     }
 
@@ -189,6 +193,8 @@ public class Building implements Serializable {
     // --- FITUR BARU: BIAYA STONE (dulunya cuma ada wood cost). Default 0 buat tipe yang gak butuh stone. ---
     public static int getStoneCost(BuildingType type) {
         if (type == BuildingType.ARCHER_TOWER) return 6;
+        if (type == BuildingType.MEDIUM_HOUSE) return 5;  // Butuh sedikit batu buat pondasi lebih kokoh
+        if (type == BuildingType.BIG_HOUSE) return 10;
         return 0;
     }
 
@@ -196,6 +202,32 @@ public class Building implements Serializable {
     // CATATAN: pengurangan civil-nya sendiri (activeCivils di GameWindow) HARUS diwire di GamePanel
     // pas tombol build ditekan -- di sini cuma data costnya. ---
     public static int getCivilCost(BuildingType type) {
+        if (type == BuildingType.ARCHER_TOWER) return 4;
+        return 0;
+    }
+
+    // --- FITUR BARU: DATA SERANGAN ARCHER TOWER --------------------------------------
+    // Tower ini NEMBAK SENDIRI (4 archer yang berdiri di atasnya), independen dari Guard.
+    // Jangkauannya sengaja dibikin lebih luas dari Guard Archer biasa (250) supaya berasa
+    // "worth it" ditaruh di titik strategis buat cover area luas / jalur masuk horde.
+    public static double getTowerRange(BuildingType type) {
+        if (type == BuildingType.ARCHER_TOWER) return 350.0; // lebih luas dari Guard Archer (250)
+        return 0.0; // 0 = building ini gak nembak sendiri
+    }
+
+    public static double getTowerDamage(BuildingType type) {
+        if (type == BuildingType.ARCHER_TOWER) return 20.0; // disamain sama base damage Guard Archer / panah
+        return 0.0;
+    }
+
+    public static long getTowerCooldown(BuildingType type) {
+        if (type == BuildingType.ARCHER_TOWER) return 1000; // 1 archer diwakili slot cooldown yg sama
+        return 0;
+    }
+
+    // Berapa target berbeda yang bisa kena panah sekaligus tiap kali cooldown abis
+    // (4 archer di atas tower = bisa nembak 4 Horde beda sekaligus kalau ada 4 dalam jangkauan)
+    public static int getTowerArrowCount(BuildingType type) {
         if (type == BuildingType.ARCHER_TOWER) return 4;
         return 0;
     }
@@ -216,6 +248,26 @@ public class Building implements Serializable {
     }
 
     public Rectangle getBounds() { return bounds; }
+
+    // --- FITUR BARU: titik asal panah buat building yang nembak sendiri (Archer Tower).
+    // Sebelumnya GamePanel pakai bounds.getCenterX/Y() -> itu titik tengah PONDASI (bawah),
+    // padahal archer-nya digambar di platform PALING ATAS sprite (posisi sama kayak draw()
+    // ngitung drawX/drawY). Makanya panahnya keliatan nongol dari bawah, bukan dari atas tower.
+    public Point2D.Double getRangedAttackOrigin() {
+        if (type == BuildingType.ARCHER_TOWER) {
+            int visualWidth = getVisualWidth(type);
+            int visualHeight = getVisualHeight(type);
+            int drawX = bounds.x - ((visualWidth - bounds.width) / 2);
+            int drawY = bounds.y - (visualHeight - bounds.height);
+
+            double originX = drawX + visualWidth / 2.0;
+            double originY = drawY + visualHeight * 0.18; // ~platform atas tempat 4 archer berdiri
+            return new Point2D.Double(originX, originY);
+        }
+        // Default (building lain yang mungkin nembak sendiri di masa depan): tengah pondasi
+        return new Point2D.Double(bounds.getCenterX(), bounds.getCenterY());
+    }
+
     public boolean contains(Point p) { return bounds.contains(p); }
     public boolean intersects(Rectangle r) { return bounds.intersects(r); }
 
