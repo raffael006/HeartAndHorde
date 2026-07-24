@@ -117,6 +117,10 @@ public class Guard implements Serializable {
     public double currentHp;
     public double attackDamage;
 
+    // --- FITUR BARU: FLASH PUTIH pas kena hit ---
+    public long lastHitTime = -999999;
+    private static final long HIT_FLASH_DURATION = 110; // ms
+
     public long lastAttackTime = 0;
     public long attackCooldown = 1000;
     public double attackRange = size + 5;
@@ -138,11 +142,12 @@ public class Guard implements Serializable {
         this.targetY = this.y;
         this.state = GuardState.IDLE;
 
+        // --- FITUR BARU: SEMUA maxHp dikali 3 (buff ketebalan darah guard) ---
         if (this.type == GuardType.SPEARMAN) {
-            this.maxHp = 100;
+            this.maxHp = 100 * 3;
             this.attackDamage = 15;
         } else if (this.type == GuardType.ARCHER) {
-            this.maxHp = 60;
+            this.maxHp = 60 * 3;
             this.attackDamage = 20;
         }
 
@@ -201,7 +206,11 @@ public class Guard implements Serializable {
         if (type == GuardType.ARCHER) {
             double attackRangePanah = 250.0;
             Horde targetEnemy = null;
-            double minDistance = sightRange;
+            // FIX: sightRange (200) lebih kecil dari attackRangePanah (250) -> sebelumnya Guard
+            // gak bisa "lihat" (apalagi balas) Horde Bowman yang nembak dari jarak 200-250,
+            // padahal jarak segitu masih kena panah musuh. Sekarang deteksinya dipatok ke
+            // yang lebih jauh, biar Guard selalu bisa bales sejauh dia sendiri bisa nembak.
+            double minDistance = Math.max(sightRange, attackRangePanah);
 
             for (Horde enemy : allHordes) {
                 double dx = this.x - enemy.x;
@@ -288,6 +297,8 @@ public class Guard implements Serializable {
 
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         targetEnemyMelee.currentHp -= this.attackDamage;
+                        targetEnemyMelee.lastHitTime = currentTime;
+                        HitParticles.burst(targetEnemyMelee.x + targetEnemyMelee.size / 2.0, targetEnemyMelee.y + targetEnemyMelee.size / 2.0, new Color(200, 30, 30), 6);
                         lastAttackTime = currentTime;
                     }
                 } else if (state != GuardState.MOVING) {
@@ -337,6 +348,17 @@ public class Guard implements Serializable {
                 g2d.setTransform(oldTransform);
             } else {
                 g2d.drawImage(fullSheet, (int)x, (int)y, size, size, null);
+            }
+
+            // --- FITUR BARU: FLASH PUTIH pas abis kena hit (fade out cepat) ---
+            long sinceHit = System.currentTimeMillis() - lastHitTime;
+            if (sinceHit >= 0 && sinceHit < HIT_FLASH_DURATION) {
+                float t = 1f - (float) sinceHit / HIT_FLASH_DURATION;
+                Composite oldComposite = g2d.getComposite();
+                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_ATOP, Math.min(1f, Math.max(0f, t))));
+                g2d.setColor(Color.WHITE);
+                g2d.fillRect((int) x, (int) y, size, size);
+                g2d.setComposite(oldComposite);
             }
         } else {
             g2d.setColor(type == GuardType.ARCHER ? new Color(50, 150, 50) : new Color(50, 50, 150));

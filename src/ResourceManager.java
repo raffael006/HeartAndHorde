@@ -70,4 +70,13 @@ public class ResourceManager {
     public void spendWood(int cost) {
         wood -= cost;
     }
+
+    // --- FITUR BARU: versi Stone, dibutuhkan buat cost bangunan yang pakai stone (mis. Archer Tower) ---
+    public boolean canAffordStone(int cost) {
+        return stone >= cost;
+    }
+
+    public void spendStone(int cost) {
+        stone -= cost;
+    }
 }

@@ -81,12 +81,19 @@ public class GamePanel extends JPanel {
     Building clickedBuilding = null;
     private BufferedImage civilBuilderImg;
 
+    // --- FITUR BARU: PANEL GAME OVER (Menang / Kalah) ---
+    private GameOverPanel gameOverPanel;
+    private boolean isGameOver = false;
+
     // --- FITUR BARU: SISTEM PRODUKSI GUARD DARI BARRACK ---
     // Setiap barrack punya antrian Guard-nya sendiri (HashMap supaya bisa beda-beda tiap bangunan)
     java.util.HashMap<Building, java.util.Queue<Guard.GuardType>> barrackQueues = new java.util.HashMap<>();
     private java.util.HashMap<Building, Float> barrackProgress = new java.util.HashMap<>();
     private final float GUARD_PRODUCTION_MAX = 300f; // 300 tick ~= 5 detik @ 60fps
     JPanel barrackQueuePanel; // Panel antrean di sebelah kanan grid menu
+
+    // --- FITUR BARU: PANEL INFO IDENTITAS BANGUNAN (HP, penghuni, dll -- muncul saat bangunan diklik) ---
+    JPanel buildingInfoPanel;
 
     // Kita ubah jadi Width agar dia meluncur/mengembang ke kanan
     private double currentSubWidth = 0.0;
@@ -153,6 +160,18 @@ public class GamePanel extends JPanel {
         currentDarkness = 0f;
         resourceManager.reset();
 
+        // --- FITUR BARU: Reset status Game Over -- sembunyikan overlay Menang/Kalah kalau lagi tampil
+        // (gameOverPanel belum ada saat resetCampaign() pertama kali dipanggil dari constructor) ---
+        isGameOver = false;
+        if (gameOverPanel != null) gameOverPanel.hideResult();
+
+        // --- FITUR BARU: Tutup panel bangunan yang mungkin masih kebuka dari sesi sebelumnya ---
+        clickedBuilding = null;
+        clickedMine = null;
+        currentMenuState = MenuState.MAIN_MENU;
+        if (buildingInfoPanel != null) buildingInfoPanel.setVisible(false);
+        if (barrackQueuePanel != null) barrackQueuePanel.setVisible(false);
+
         // --- FITUR BARU: Reset sistem wave -> mulai hitung mundur ke Wave I sesuai difficulty
         // (durasi & isi wave sekarang 100% dibaca dari DifficultyConfig.java, bukan formula random) ---
         waveManager.reset(difficulty);
@@ -204,276 +223,350 @@ public class GamePanel extends JPanel {
         resetCampaign();
 
         try {
-            abandonedMineImg = ImageIO.read(AssetPath.get("assets/img/abandoned_mine.png"));
-            builtMineImg = ImageIO.read(AssetPath.get("assets/img/mine.png"));
+            abandonedMineImg = ImageIO.read(new File("assets/img/abandoned_mine.png"));
+            builtMineImg = ImageIO.read(new File("assets/img/mine.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat gambar Tambang!");
         }
 
         // 1. Muat Gambar (Menggunakan path src/ dan dipisah agar aman)
         try {
-            gameplayBg = ImageIO.read(AssetPath.get("assets/img/GAMEBACKGROUND.png"));
-            treeImg = ImageIO.read(AssetPath.get("assets/img/tree.png"));
+            gameplayBg = ImageIO.read(new File("assets/img/GAMEBACKGROUND.png"));
+            treeImg = ImageIO.read(new File("assets/img/tree.png"));
         } catch (Exception e) {}
 
         try {
             // Perbaikan: Tambahkan "assets/" dan sesuaikan nama file sm_house.png
-            smallHouseImg = ImageIO.read(AssetPath.get("assets/img/smhouse.png"));
-            mediumHouseImg = ImageIO.read(AssetPath.get("assets/img/mhouse.png"));
-            bigHouseImg = ImageIO.read(AssetPath.get("assets/img/bighouse.png"));
-            farmImg = ImageIO.read(AssetPath.get("assets/img/farm.png"));
-            storageImg = ImageIO.read(AssetPath.get("assets/img/storage.png"));
-            barrackImg = ImageIO.read(AssetPath.get("assets/img/barrack.png"));
-            underConstructionImg = ImageIO.read(AssetPath.get("assets/img/building.png"));
+            smallHouseImg = ImageIO.read(new File("assets/img/smhouse.png"));
+            mediumHouseImg = ImageIO.read(new File("assets/img/mhouse.png"));
+            bigHouseImg = ImageIO.read(new File("assets/img/bighouse.png"));
+            farmImg = ImageIO.read(new File("assets/img/farm.png"));
+            storageImg = ImageIO.read(new File("assets/img/storage.png"));
+            barrackImg = ImageIO.read(new File("assets/img/barrack.png"));
+            underConstructionImg = ImageIO.read(new File("assets/img/building.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Gambar Rumah!");
         }
 
         try {
-            heartImg = ImageIO.read(AssetPath.get("assets/img/Heart.png"));
-            System.out.println(heartImg);
+            heartImg = ImageIO.read(new File("assets/img/Heart.png"));            System.out.println(heartImg);
         } catch (Exception e) {
             System.out.println("Gagal memuat Heart!");
         }
 
         try {
-            archerImg = ImageIO.read(AssetPath.get("assets/img/Hearthguardbow.png"));
-            spearmanImg = ImageIO.read(AssetPath.get("assets/img/hearthguard_spier.png"));
+            archerImg = ImageIO.read(new File("assets/img/Hearthguardbow.png"));
+            spearmanImg = ImageIO.read(new File("assets/img/hearthguard_spier.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Pasukan Guard!");
         }
 
         try {
-            axemanImg = ImageIO.read(AssetPath.get("assets/img/1Horde.png"));
-            shieldImg = ImageIO.read(AssetPath.get("assets/img/2Horde.png"));
-            bowmanHordeImg = ImageIO.read(AssetPath.get("assets/img/3Horde.png"));
-            bearImg = ImageIO.read(AssetPath.get("assets/img/Bear_Horde.png"));
-            twoAxeImg = ImageIO.read(AssetPath.get("assets/img/Horde_2axe.png"));
-            logHordeImg = ImageIO.read(AssetPath.get("assets/img/Log_horde.png"));
-            sorcererImg = ImageIO.read(AssetPath.get("assets/img/sorcerer_Horde.png"));
+            axemanImg = ImageIO.read(new File("assets/img/1Horde.png"));
+            shieldImg = ImageIO.read(new File("assets/img/2Horde.png"));
+            bowmanHordeImg = ImageIO.read(new File("assets/img/3Horde.png"));
+            bearImg = ImageIO.read(new File("assets/img/Bear_Horde.png"));
+            twoAxeImg = ImageIO.read(new File("assets/img/Horde_2axe.png"));
+            logHordeImg = ImageIO.read(new File("assets/img/Log_horde.png"));
+            sorcererImg = ImageIO.read(new File("assets/img/sorcerer_Horde.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Pasukan Horde!");
         }
 
         try {
-            civilImg = ImageIO.read(AssetPath.get("assets/img/civil_h&h.png"));
-            civilBuilderImg = ImageIO.read(AssetPath.get("assets/img/Civil_Builder.png"));
+            civilImg = ImageIO.read(new File("assets/img/civil_h&h.png"));
+            civilBuilderImg = ImageIO.read(new File("assets/img/Civil_Builder.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat Civil!");
         }
 
         try {
-            iconMilitary = ImageIO.read(AssetPath.get("assets/img/Military-removebg-preview.png"));
-            iconWave = ImageIO.read(AssetPath.get("assets/img/Wafe-removebg-preview.png"));
-            iconStone = ImageIO.read(AssetPath.get("assets/img/Stone-removebg-preview.png"));
-            iconWood = ImageIO.read(AssetPath.get("assets/img/Wood-removebg-preview.png"));
-            iconSteel = ImageIO.read(AssetPath.get("assets/img/Steel-removebg-preview.png"));
-            iconFood = ImageIO.read(AssetPath.get("assets/img/food-removebg-preview.png"));
-            iconCivil = ImageIO.read(AssetPath.get("assets/img/Civil-removebg-preview.png"));
+            iconMilitary = ImageIO.read(new File("assets/img/Military-removebg-preview.png"));
+            iconWave = ImageIO.read(new File("assets/img/Wafe-removebg-preview.png"));
+            iconStone = ImageIO.read(new File("assets/img/Stone-removebg-preview.png"));
+            iconWood = ImageIO.read(new File("assets/img/Wood-removebg-preview.png"));
+            iconSteel = ImageIO.read(new File("assets/img/Steel-removebg-preview.png"));
+            iconFood = ImageIO.read(new File("assets/img/food-removebg-preview.png"));
+            iconCivil = ImageIO.read(new File("assets/img/Civil-removebg-preview.png"));
         } catch (Exception e) {
             System.out.println("Gagal memuat icon resource bar!");
         }
 
         try {
-            wallLeftImg = ImageIO.read(AssetPath.get("assets/img/woodenWall_L.png"));
-            wallRightImg = ImageIO.read(AssetPath.get("assets/img/woodenWall_R.png"));
-            wallUDImg = ImageIO.read(AssetPath.get("assets/img/WoodenWall_UD.png"));
+            wallLeftImg = ImageIO.read(new File("assets/img/woodenWall_L.png"));
+            wallRightImg = ImageIO.read(new File("assets/img/woodenWall_R.png"));
+            wallUDImg = ImageIO.read(new File("assets/img/WoodenWall_UD.png"));
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         try{
-            builderImg = ImageIO.read(AssetPath.get("assets/img/builder.png"));
+            builderImg = ImageIO.read(new File("assets/img/builder.png"));
         } catch (Exception e) {
             e.printStackTrace();
         }
 
 
         cameraTimer = new Timer(16, e -> {
-            boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
+            // --- FITUR BARU: begitu Game Over (menang/kalah) terdeteksi, semua logika simulasi
+            // (gerakan, combat, spawn wave, dsb) berhenti diupdate -- hanya overlay yang tetap tampil.
+            // Blok if ini ditutup persis sebelum repaint() paling bawah supaya HUD/overlay tetap kereder. ---
+            if (!isGameOver) {
+                boolean moved = camera.move(wPressed, sPressed, aPressed, dPressed);
 
-            for (CivilBuilder cb : window.activeCivilBuilders) {
-                cb.update();
-            }
+                for (CivilBuilder cb : window.activeCivilBuilders) {
+                    cb.update();
+                }
 
-            // --- FITUR BARU: LOGIKA PRODUKSI GUARD DARI BARRACK ---
-            for (Building b : window.savedBuildings) {
-                if (b.type == Building.BuildingType.BARRACK && b.isBuilt) {
-                    java.util.Queue<Guard.GuardType> q = barrackQueues.get(b);
-                    if (q != null && !q.isEmpty()) {
-                        float prog = barrackProgress.getOrDefault(b, 0f) + 1f;
-                        if (prog >= GUARD_PRODUCTION_MAX) {
-                            Guard.GuardType type = q.poll();
-                            double spawnX = b.getBounds().getCenterX();
-                            double spawnY = b.getBounds().getMaxY() + 15;
-                            window.activeGuards.add(new Guard(type, spawnX, spawnY));
-                            barrackProgress.put(b, 0f);
-                        } else {
-                            barrackProgress.put(b, prog);
+                // --- FITUR BARU: LOGIKA PRODUKSI GUARD DARI BARRACK ---
+                for (Building b : window.savedBuildings) {
+                    if (b.type == Building.BuildingType.BARRACK && b.isBuilt) {
+                        java.util.Queue<Guard.GuardType> q = barrackQueues.get(b);
+                        if (q != null && !q.isEmpty()) {
+                            float prog = barrackProgress.getOrDefault(b, 0f) + 1f;
+                            if (prog >= GUARD_PRODUCTION_MAX) {
+                                Guard.GuardType type = q.poll();
+                                double spawnX = b.getBounds().getCenterX();
+                                double spawnY = b.getBounds().getMaxY() + 15;
+                                window.activeGuards.add(new Guard(type, spawnX, spawnY));
+                                barrackProgress.put(b, 0f);
+                            } else {
+                                barrackProgress.put(b, prog);
+                            }
                         }
                     }
                 }
-            }
-            // Refresh panel antrean kalau lagi terbuka
-            if (barrackQueuePanel != null && barrackQueuePanel.isVisible()) barrackQueuePanel.repaint();
+                // Refresh panel antrean kalau lagi terbuka
+                if (barrackQueuePanel != null && barrackQueuePanel.isVisible()) barrackQueuePanel.repaint();
+                // --- FITUR BARU: Refresh panel info bangunan kalau lagi terbuka (HP/penghuni real-time) ---
+                if (buildingInfoPanel != null && buildingInfoPanel.isVisible()) buildingInfoPanel.repaint();
 
-            // 1. Update Guards (Parameter Nambah)
-            for (Guard g : window.activeGuards) {
-                g.update(window.activeGuards, window.activeHordes, window.activeProjectiles, window.savedBuildings);
-                fogOfWar.revealIfMoved(g, g.x, g.y, GUARD_REVEAL_RADIUS);
-            }
-            fogOfWar.update();
-
-            // 2. Update Hordes (Parameter Nambah -- sekarang bawa data Civil juga biar bisa niatin warga sipil)
-            for (Horde h : window.activeHordes) {
-                h.update(window.activeHordes, window.activeGuards, window.activeProjectiles, window.activeCivils, window.savedBuildings);
-            }
-
-            // --- UPDATE CIVIL (Jalan-jalan santai, kabur kalau ada Horde deket, pakai graph biar gak nabrak rumah) ---
-            for (Civil c : window.activeCivils) {
-                c.update(window.activeHordes, window.savedBuildings);
-            }
-
-            // =======================================================
-            // --- LOGIKA FISIKA: ANTI NEMBUS BANGUNAN (SOLID WALL) ---
-            // =======================================================
-            for (Building b : window.savedBuildings) {
-                Rectangle wall = b.getSolidHitbox();
-
-                // 1. Cek Tabrakan Guard
+                // 1. Update Guards (Parameter Nambah)
                 for (Guard g : window.activeGuards) {
-                    // Kotak kaki Guard (hanya setengah badan ke bawah)
-                    Rectangle foot = new Rectangle((int)g.x, (int)g.y + (g.size/2), g.size, g.size/2);
-                    if (wall.intersects(foot)) {
-                        // Geser paksa keluar (Efek meluncur di tembok)
-                        if (g.x + g.size/2 < wall.x + wall.width/2) g.x -= g.speed; else g.x += g.speed;
-                        if (g.y + g.size/2 < wall.y + wall.height/2) g.y -= g.speed; else g.y += g.speed;
-                    }
+                    g.update(window.activeGuards, window.activeHordes, window.activeProjectiles, window.savedBuildings);
+                    fogOfWar.revealIfMoved(g, g.x, g.y, GUARD_REVEAL_RADIUS);
                 }
+                fogOfWar.update();
 
-                // 2. Cek Tabrakan Horde
+                // --- FITUR BARU: update posisi & umur semua particle hit-effect ---
+                HitParticles.update();
+
+                // 2. Update Hordes (Parameter Nambah -- sekarang bawa data Civil juga biar bisa niatin warga sipil)
                 for (Horde h : window.activeHordes) {
-                    Rectangle foot = new Rectangle((int)h.x, (int)h.y + (h.size/2), h.size, h.size/2);
-                    if (wall.intersects(foot)) {
-                        if (h.x + h.size/2 < wall.x + wall.width/2) h.x -= h.speed; else h.x += h.speed;
-                        if (h.y + h.size/2 < wall.y + wall.height/2) h.y -= h.speed; else h.y += h.speed;
-                    }
+                    h.update(window.activeHordes, window.activeGuards, window.activeProjectiles, window.activeCivils, window.savedBuildings);
                 }
 
-                // 3. Cek Tabrakan Civil
+                // --- UPDATE CIVIL (Jalan-jalan santai, kabur kalau ada Horde deket, pakai graph biar gak nabrak rumah) ---
                 for (Civil c : window.activeCivils) {
-                    Rectangle foot = new Rectangle((int)c.x, (int)c.y + (c.size/2), c.size, c.size/2);
-                    if (wall.intersects(foot)) {
-                        if (c.x + c.size/2 < wall.x + wall.width/2) c.x -= c.speed; else c.x += c.speed;
-                        if (c.y + c.size/2 < wall.y + wall.height/2) c.y -= c.speed; else c.y += c.speed;
+                    c.update(window.activeHordes, window.savedBuildings);
+                }
+
+                // =======================================================
+                // --- LOGIKA FISIKA: ANTI NEMBUS BANGUNAN (SOLID WALL) ---
+                // =======================================================
+                for (Building b : window.savedBuildings) {
+                    Rectangle wall = b.getSolidHitbox();
+
+                    // 1. Cek Tabrakan Guard
+                    for (Guard g : window.activeGuards) {
+                        // Kotak kaki Guard (hanya setengah badan ke bawah)
+                        Rectangle foot = new Rectangle((int)g.x, (int)g.y + (g.size/2), g.size, g.size/2);
+                        if (wall.intersects(foot)) {
+                            // Geser paksa keluar (Efek meluncur di tembok)
+                            if (g.x + g.size/2 < wall.x + wall.width/2) g.x -= g.speed; else g.x += g.speed;
+                            if (g.y + g.size/2 < wall.y + wall.height/2) g.y -= g.speed; else g.y += g.speed;
+                        }
+                    }
+
+                    // 2. Cek Tabrakan Horde
+                    for (Horde h : window.activeHordes) {
+                        Rectangle foot = new Rectangle((int)h.x, (int)h.y + (h.size/2), h.size, h.size/2);
+                        if (wall.intersects(foot)) {
+                            if (h.x + h.size/2 < wall.x + wall.width/2) h.x -= h.speed; else h.x += h.speed;
+                            if (h.y + h.size/2 < wall.y + wall.height/2) h.y -= h.speed; else h.y += h.speed;
+                        }
+                    }
+
+                    // 3. Cek Tabrakan Civil
+                    for (Civil c : window.activeCivils) {
+                        Rectangle foot = new Rectangle((int)c.x, (int)c.y + (c.size/2), c.size, c.size/2);
+                        if (wall.intersects(foot)) {
+                            if (c.x + c.size/2 < wall.x + wall.width/2) c.x -= c.speed; else c.x += c.speed;
+                            if (c.y + c.size/2 < wall.y + wall.height/2) c.y -= c.speed; else c.y += c.speed;
+                        }
                     }
                 }
-            }
 
-            // --- 3. TAMBAHKAN LOOP PROYEKTIL INI ---
-            for (Projectile p : window.activeProjectiles) {
-                p.update();
+                // --- 3. TAMBAHKAN LOOP PROYEKTIL INI ---
+                for (Projectile p : window.activeProjectiles) {
+                    p.update();
 
-                // --- LOGIKA COLLISION / HITBOX SAAT DI UDARA ---
-                // (Agar efisien, kita cek di sini satu-satu list objek yang ada)
-                if (p.active && !p.hasLanded()) {
-                    Rectangle2D.Double pHitbox = p.getHitbox();
+                    // --- LOGIKA COLLISION / HITBOX SAAT DI UDARA ---
+                    // (Agar efisien, kita cek di sini satu-satu list objek yang ada)
+                    if (p.active && !p.hasLanded()) {
+                        Rectangle2D.Double pHitbox = p.getHitbox();
 
-                    if (p.isFromPlayer()) {
-                        // Cek kena Horde
-                        for (Horde enemy : window.activeHordes) {
-                            // Hitbox Horde kita buat sedikit besar biar gampang kena
-                            if (new Rectangle2D.Double(enemy.x, enemy.y, enemy.size, enemy.size).intersects(pHitbox)) {
-                                enemy.currentHp -= p.getDamage();
-                                p.active = false; // Panah hilang karena menancap di badan
-                                break; // Selesai cek list Horde untuk panah ini
+                        if (p.isFromPlayer()) {
+                            // Cek kena Horde
+                            for (Horde enemy : window.activeHordes) {
+                                // Hitbox Horde kita buat sedikit besar biar gampang kena
+                                if (new Rectangle2D.Double(enemy.x, enemy.y, enemy.size, enemy.size).intersects(pHitbox)) {
+                                    enemy.currentHp -= p.getDamage();
+                                    enemy.lastHitTime = System.currentTimeMillis();
+                                    HitParticles.burst(enemy.x + enemy.size / 2.0, enemy.y + enemy.size / 2.0, new Color(200, 30, 30), 6);
+                                    p.active = false; // Panah hilang karena menancap di badan
+                                    break; // Selesai cek list Horde untuk panah ini
+                                }
                             }
-                        }
-                    } else {
-                        // Cek kena Guard
-                        boolean panahMenancap = false;
-                        for (Guard guard : window.activeGuards) {
-                            if (new Rectangle2D.Double(guard.x, guard.y, guard.size, guard.size).intersects(pHitbox)) {
-                                guard.currentHp -= p.getDamage();
-                                p.active = false; // Panah hilang menancap di badan
-                                panahMenancap = true;
-                                break;
-                            }
-                        }
-                        // --- FITUR BARU: Cek kena Civil juga (kalau panah Bowman niatin warga sipil) ---
-                        if (!panahMenancap) {
-                            for (Civil c : window.activeCivils) {
-                                if (c.hidden) continue; // Civil yang lagi ngumpet di rumah gak bisa kena panah
-                                if (new Rectangle2D.Double(c.x, c.y, c.size, c.size).intersects(pHitbox)) {
-                                    c.currentHp -= p.getDamage();
-                                    p.active = false;
+                        } else {
+                            // Cek kena Guard
+                            boolean panahMenancap = false;
+                            for (Guard guard : window.activeGuards) {
+                                if (new Rectangle2D.Double(guard.x, guard.y, guard.size, guard.size).intersects(pHitbox)) {
+                                    guard.currentHp -= p.getDamage();
+                                    guard.lastHitTime = System.currentTimeMillis();
+                                    HitParticles.burst(guard.x + guard.size / 2.0, guard.y + guard.size / 2.0, new Color(200, 30, 30), 6);
+                                    p.active = false; // Panah hilang menancap di badan
+                                    panahMenancap = true;
                                     break;
+                                }
+                            }
+                            // --- FITUR BARU: Cek kena Civil juga (kalau panah Bowman niatin warga sipil) ---
+                            if (!panahMenancap) {
+                                for (Civil c : window.activeCivils) {
+                                    if (c.hidden) continue; // Civil yang lagi ngumpet di rumah gak bisa kena panah
+                                    if (new Rectangle2D.Double(c.x, c.y, c.size, c.size).intersects(pHitbox)) {
+                                        c.currentHp -= p.getDamage();
+                                        HitParticles.burst(c.x + c.size / 2.0, c.y + c.size / 2.0, new Color(200, 30, 30), 6);
+                                        p.active = false;
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // 4. Bersihkan data (Mayat & Panah non-aktif)
-            window.activeGuards.removeIf(g -> g.currentHp <= 0);
-            window.activeHordes.removeIf(Horde::isDead);
-            window.activeCivils.removeIf(c -> c.currentHp <= 0); // --- FITUR BARU: Civil yang HP-nya habis dihapus juga
-
-            // --- LOGIKA PROGRESS TEBANG POHON ---
-            for (List<Tree> daftarPohon : mapPohon.values()) {
-                java.util.Iterator<Tree> it = daftarPohon.iterator();
-                while (it.hasNext()) {
-                    Tree pohon = it.next();
-                    if (pohon.harvestProgress >= pohon.maxHarvest) {
-                        it.remove();
-                        resourceManager.addWood(5);
+                // 4. Bersihkan data (Mayat & Panah non-aktif)
+                // --- FITUR BARU: burst partikel gede pas ada yang beneran mati, SEBELUM dihapus ---
+                for (Guard g : window.activeGuards) {
+                    if (g.currentHp <= 0) {
+                        HitParticles.burst(g.x + g.size / 2.0, g.y + g.size / 2.0, new Color(180, 20, 20), 16);
                     }
                 }
-            }
+                window.activeGuards.removeIf(g -> g.currentHp <= 0);
 
-            // --- LOGIKA PROGRESS MENGHANCURKAN BANGUNAN ---
-            for (Building b : window.savedBuildings) {
-                if (b.isDemolishing) b.demolishProgress += 1.0f;
-            }
-            // Bersihkan jika sudah hancur total
-            window.savedBuildings.removeIf(b -> b.isDemolishing && b.demolishProgress >= b.maxDemolish);
+                // Bear khusus "ganti wujud" (isDead()-nya return false), jadi jangan di-burst di sini
+                for (Horde h : window.activeHordes) {
+                    if (h.currentHp <= 0 && h.type != Horde.HordeType.BEAR) {
+                        Color deathColor = (h.type == Horde.HordeType.LOG)
+                                ? new Color(120, 80, 40)  // serpihan kayu buat Log
+                                : new Color(180, 20, 20); // darah buat lainnya
+                        HitParticles.burst(h.x + h.size / 2.0, h.y + h.size / 2.0, deathColor, 16);
+                    }
+                }
+                window.activeHordes.removeIf(Horde::isDead);
+                // --- FITUR BARU: Civil yang HP-nya habis dihapus, sekalian lepas slot rumahnya
+                // biar bisa keisi penghuni baru lagi di regenerasi pagi berikutnya ---
+                window.activeCivils.removeIf(c -> {
+                    boolean dead = c.currentHp <= 0;
+                    if (dead && c.homeBuilding != null) c.homeBuilding.exitBuilding(c);
+                    return dead;
+                });
 
-            // --- FITUR BARU: Bersihkan building yang darahnya habis diserang Horde ---
-            window.savedBuildings.removeIf(b -> b.isBuilt && b.currentHp <= 0);
-
-            for (Building b : window.savedBuildings) {
-                if (!b.isBuilt && b.assignedBuilder == null) {
-                    // --- FITUR BARU: SISTEM ANTREAN CIVIL BUILDER ---
-                    // 1) Prioritaskan builder yang lagi nganggur di rumah (langsung berangkat sekarang).
-                    CivilBuilder chosenBuilder = null;
-                    for (CivilBuilder cb : window.activeCivilBuilders) {
-                        if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
-                            chosenBuilder = cb;
-                            break;
+                // --- LOGIKA PROGRESS TEBANG POHON ---
+                for (List<Tree> daftarPohon : mapPohon.values()) {
+                    java.util.Iterator<Tree> it = daftarPohon.iterator();
+                    while (it.hasNext()) {
+                        Tree pohon = it.next();
+                        if (pohon.harvestProgress >= pohon.maxHarvest) {
+                            it.remove();
+                            resourceManager.addWood(5);
                         }
                     }
-                    // 2) Kalau semua builder lagi sibuk, taruh ke builder dengan antrean paling sedikit
-                    // (biar beban kerja merata kalau builder-nya lebih dari satu).
-                    if (chosenBuilder == null) {
+                }
+
+                // --- LOGIKA PROGRESS MENGHANCURKAN BANGUNAN ---
+                for (Building b : window.savedBuildings) {
+                    if (b.isDemolishing) b.demolishProgress += 1.0f;
+                }
+                // Bersihkan jika sudah hancur total
+                window.savedBuildings.removeIf(b -> b.isDemolishing && b.demolishProgress >= b.maxDemolish);
+
+                // --- FITUR BARU: Archer Tower yang hancur (darah habis) berubah jadi 4 Guard Bow ---
+                // Guard-nya disebar dikit di sekitar reruntuhan biar gak numpuk di 1 titik persis.
+                for (Building b : window.savedBuildings) {
+                    if (b.isBuilt && b.currentHp <= 0 && b.type == Building.BuildingType.ARCHER_TOWER) {
+                        double baseX = b.getBounds().getCenterX();
+                        double baseY = b.getBounds().getMaxY() + 15;
+                        for (int i = 0; i < 4; i++) {
+                            double spawnX = baseX + (i - 1.5) * 18;
+                            double spawnY = baseY;
+                            window.activeGuards.add(new Guard(Guard.GuardType.ARCHER, spawnX, spawnY));
+                        }
+                    }
+                }
+
+                // --- FITUR BARU: Bersihkan building yang darahnya habis diserang Horde ---
+                window.savedBuildings.removeIf(b -> b.isBuilt && b.currentHp <= 0);
+
+                for (Building b : window.savedBuildings) {
+                    if (!b.isBuilt && b.assignedBuilder == null) {
+                        // --- FITUR BARU: SISTEM ANTREAN CIVIL BUILDER ---
+                        // 1) Prioritaskan builder yang lagi nganggur di rumah (langsung berangkat sekarang).
+                        CivilBuilder chosenBuilder = null;
                         for (CivilBuilder cb : window.activeCivilBuilders) {
-                            if (chosenBuilder == null || cb.buildQueue.size() < chosenBuilder.buildQueue.size()) {
+                            if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
                                 chosenBuilder = cb;
+                                break;
                             }
                         }
-                    }
-                    if (chosenBuilder != null) {
-                        chosenBuilder.queueBuilding(b, window.savedBuildings);
+                        // 2) Kalau semua builder lagi sibuk, taruh ke builder dengan antrean paling sedikit
+                        // (biar beban kerja merata kalau builder-nya lebih dari satu).
+                        if (chosenBuilder == null) {
+                            for (CivilBuilder cb : window.activeCivilBuilders) {
+                                if (chosenBuilder == null || cb.buildQueue.size() < chosenBuilder.buildQueue.size()) {
+                                    chosenBuilder = cb;
+                                }
+                            }
+                        }
+                        if (chosenBuilder != null) {
+                            chosenBuilder.queueBuilding(b, window.savedBuildings);
+                        }
                     }
                 }
-            }
 
-            // --- FITUR BARU: SISTEM ANTREAN CIVIL BUILDER UNTUK POHON ---
-            // (Dipindah keluar dari loop Mine supaya SELALU jalan tiap tick, bukan cuma
-            // pas kebetulan ada Mine yang lagi dibangun.)
-            for (List<Tree> daftarPohon : mapPohon.values()) {
-                for (Tree pohon : daftarPohon) {
-                    if (pohon.isHarvesting && pohon.assignedBuilder == null) {
+                // --- FITUR BARU: SISTEM ANTREAN CIVIL BUILDER UNTUK POHON ---
+                // (Dipindah keluar dari loop Mine supaya SELALU jalan tiap tick, bukan cuma
+                // pas kebetulan ada Mine yang lagi dibangun.)
+                for (List<Tree> daftarPohon : mapPohon.values()) {
+                    for (Tree pohon : daftarPohon) {
+                        if (pohon.isHarvesting && pohon.assignedBuilder == null) {
+                            CivilBuilder chosenBuilder = null;
+                            for (CivilBuilder cb : window.activeCivilBuilders) {
+                                if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
+                                    chosenBuilder = cb;
+                                    break;
+                                }
+                            }
+                            if (chosenBuilder == null) {
+                                for (CivilBuilder cb : window.activeCivilBuilders) {
+                                    int load = cb.buildQueue.size() + cb.chopQueue.size();
+                                    int chosenLoad = (chosenBuilder == null) ? Integer.MAX_VALUE
+                                            : chosenBuilder.buildQueue.size() + chosenBuilder.chopQueue.size();
+                                    if (load < chosenLoad) chosenBuilder = cb;
+                                }
+                            }
+                            if (chosenBuilder != null) chosenBuilder.queueChop(pohon, window.savedBuildings);
+                        }
+                    }
+                }
+
+                // --- LOGIKA PEMBANGUNAN TAMBANG: SEKARANG BUTUH CIVILBUILDER ---
+                // Progress buildProgress-nya sekarang ditangani oleh CivilBuilder.update() (case MINING),
+                // di sini cuma tugas nyariin & ngirim builder ke Mine yang lagi butuh dibangun.
+                for (Mine m : activeMines) {
+                    if (m.isBuilding && !m.isBuilt && m.assignedBuilder == null) {
                         CivilBuilder chosenBuilder = null;
                         for (CivilBuilder cb : window.activeCivilBuilders) {
                             if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
@@ -483,88 +576,91 @@ public class GamePanel extends JPanel {
                         }
                         if (chosenBuilder == null) {
                             for (CivilBuilder cb : window.activeCivilBuilders) {
-                                int load = cb.buildQueue.size() + cb.chopQueue.size();
+                                int load = cb.buildQueue.size() + cb.chopQueue.size() + cb.mineQueue.size();
                                 int chosenLoad = (chosenBuilder == null) ? Integer.MAX_VALUE
-                                        : chosenBuilder.buildQueue.size() + chosenBuilder.chopQueue.size();
+                                        : chosenBuilder.buildQueue.size() + chosenBuilder.chopQueue.size() + chosenBuilder.mineQueue.size();
                                 if (load < chosenLoad) chosenBuilder = cb;
                             }
                         }
-                        if (chosenBuilder != null) chosenBuilder.queueChop(pohon, window.savedBuildings);
+                        if (chosenBuilder != null) chosenBuilder.queueMine(m, window.savedBuildings);
                     }
                 }
-            }
 
-            // --- LOGIKA PEMBANGUNAN TAMBANG: SEKARANG BUTUH CIVILBUILDER ---
-            // Progress buildProgress-nya sekarang ditangani oleh CivilBuilder.update() (case MINING),
-            // di sini cuma tugas nyariin & ngirim builder ke Mine yang lagi butuh dibangun.
-            for (Mine m : activeMines) {
-                if (m.isBuilding && !m.isBuilt && m.assignedBuilder == null) {
-                    CivilBuilder chosenBuilder = null;
-                    for (CivilBuilder cb : window.activeCivilBuilders) {
-                        if (cb.state == CivilBuilder.BuilderState.IDLE_HOME) {
-                            chosenBuilder = cb;
-                            break;
-                        }
-                    }
-                    if (chosenBuilder == null) {
-                        for (CivilBuilder cb : window.activeCivilBuilders) {
-                            int load = cb.buildQueue.size() + cb.chopQueue.size() + cb.mineQueue.size();
-                            int chosenLoad = (chosenBuilder == null) ? Integer.MAX_VALUE
-                                    : chosenBuilder.buildQueue.size() + chosenBuilder.chopQueue.size() + chosenBuilder.mineQueue.size();
-                            if (load < chosenLoad) chosenBuilder = cb;
-                        }
-                    }
-                    if (chosenBuilder != null) chosenBuilder.queueMine(m, window.savedBuildings);
-                }
-            }
+                // --- TAMBAHKAN PEMBERSIH PANAH NON-AKTIF ---
+                window.activeProjectiles.removeIf(p -> !p.active);
 
-            // --- TAMBAHKAN PEMBERSIH PANAH NON-AKTIF ---
-            window.activeProjectiles.removeIf(p -> !p.active);
-
-            // --- FITUR BARU: Setiap Storage yang sudah jadi, nambah kapasitas max resource +25 ---
-            int builtStorageCount = 0;
-            for (Building b : window.savedBuildings) {
-                if (b.isBuilt && b.type == Building.BuildingType.STORAGE) builtStorageCount++;
-            }
-            resourceManager.updateStorageCapacity(builtStorageCount);
-
-            // --- 5. LOGIKA SIKLUS SIANG & MALAM ---
-            dayNightTick++;
-
-            // Anggap 1 detik = 60 frame (karena timer 16ms)
-            // Siang berlangsung selama 60 detik (3600 tick)
-            if (isDayTime && dayNightTick > 3600) {
-                isDayTime = false;
-                dayNightTick = 0;
-                // Malam berlangsung selama 30 detik (1800 tick)
-            } else if (!isDayTime && dayNightTick > 1800) {
-                isDayTime = true;
-                dayNightTick = 0;
-
-                currentDay++;
-
-                // --- FITUR BARU: Setiap Farm yang sudah jadi, nambah 5 food tiap pagi ---
-                int farmCount = 0;
+                // --- FITUR BARU: Setiap Storage yang sudah jadi, nambah kapasitas max resource +25 ---
+                int builtStorageCount = 0;
                 for (Building b : window.savedBuildings) {
-                    if (b.isBuilt && b.type == Building.BuildingType.FARM) farmCount++;
+                    if (b.isBuilt && b.type == Building.BuildingType.STORAGE) builtStorageCount++;
                 }
-                // farmCount dipakai di resourceManager.applyMorningIncome() di bawah
+                resourceManager.updateStorageCapacity(builtStorageCount);
 
-                // --- FITUR BARU: Setiap Mine yang sudah jadi, nambah 5 stone & 5 steel tiap pagi ---
-                int builtMineCount = 0;
-                for (Mine m : activeMines) {
-                    if (m.isBuilt) builtMineCount++;
+                // --- 5. LOGIKA SIKLUS SIANG & MALAM ---
+                dayNightTick++;
+
+                // Anggap 1 detik = 60 frame (karena timer 16ms)
+                // Siang berlangsung selama 60 detik (3600 tick)
+                if (isDayTime && dayNightTick > 3600) {
+                    isDayTime = false;
+                    dayNightTick = 0;
+                    // Malam berlangsung selama 30 detik (1800 tick)
+                } else if (!isDayTime && dayNightTick > 1800) {
+                    isDayTime = true;
+                    dayNightTick = 0;
+
+                    currentDay++;
+
+                    // --- FITUR BARU: Setiap Farm yang sudah jadi, nambah 5 food tiap pagi ---
+                    int farmCount = 0;
+                    for (Building b : window.savedBuildings) {
+                        if (b.isBuilt && b.type == Building.BuildingType.FARM) farmCount++;
+                    }
+                    // farmCount dipakai di resourceManager.applyMorningIncome() di bawah
+
+                    // --- FITUR BARU: Setiap Mine yang sudah jadi, nambah 5 stone & 5 steel tiap pagi ---
+                    int builtMineCount = 0;
+                    for (Mine m : activeMines) {
+                        if (m.isBuilt) builtMineCount++;
+                    }
+                    resourceManager.applyMorningIncome(farmCount, builtMineCount);
+
+                    // --- FITUR BARU: REGENERASI PENGHUNI RUMAH ("berkembang biak") ---
+                    // Tiap pagi, rumah yang masih punya slot kosong (occupants < maxCapacity)
+                    // kedatangan 1 penghuni baru -- bukan langsung penuh sekaligus, biar berasa
+                    // bertumbuh pelan-pelan tiap hari, bukan instan.
+                    for (Building b : window.savedBuildings) {
+                        boolean isHouse = b.isBuilt && (b.type == Building.BuildingType.SMALL_HOUSE
+                                || b.type == Building.BuildingType.MEDIUM_HOUSE
+                                || b.type == Building.BuildingType.BIG_HOUSE);
+                        if (isHouse && b.occupants.size() < b.maxCapacity) {
+                            double spawnX = b.getBounds().getCenterX();
+                            double spawnY = b.getBounds().getCenterY();
+                            Civil newborn = new Civil(spawnX, spawnY, b);
+                            window.activeCivils.add(newborn);
+                            b.enterBuilding(newborn);
+                        }
+                    }
                 }
-                resourceManager.applyMorningIncome(farmCount, builtMineCount);
-            }
 
-            // Transisi pergantian langit super halus perlahan-lahan
-            float targetDarkness = isDayTime ? 0.0f : MAX_DARKNESS;
-            currentDarkness += (targetDarkness - currentDarkness) * 0.005f;
+                // Transisi pergantian langit super halus perlahan-lahan
+                float targetDarkness = isDayTime ? 0.0f : MAX_DARKNESS;
+                currentDarkness += (targetDarkness - currentDarkness) * 0.005f;
 
-            // --- FITUR BARU: 6. HITUNG MUNDUR & SPAWN WAVE HORDE (Easy/Medium/Hard) ---
-            waveManager.tick(window);
-            if (waveCountdownBar != null) waveCountdownBar.repaint();
+                // --- FITUR BARU: 6. HITUNG MUNDUR & SPAWN WAVE HORDE (Easy/Medium/Hard) ---
+                waveManager.tick(window);
+                if (waveCountdownBar != null) waveCountdownBar.repaint();
+
+                // --- FITUR BARU: DETEKSI GAME OVER ---
+                // KALAH: Heart sudah hancur (dibersihkan dari savedBuildings begitu currentHp <= 0 di atas).
+                // MENANG: semua wave campaign sudah tuntas dispawn & tidak ada Horde tersisa di map.
+                boolean heartMasihAda = window.savedBuildings.stream().anyMatch(b -> b.type == Building.BuildingType.HEART);
+                if (!heartMasihAda) {
+                    triggerGameOver(false);
+                } else if (waveManager.isAllWavesSpawned() && window.activeHordes.isEmpty()) {
+                    triggerGameOver(true);
+                }
+            } // penutup blok if (!isGameOver)
 
             repaint(); // (Ini bawaan aslinya, pastikan ini tetap di posisi paling bawah)
 
@@ -581,12 +677,27 @@ public class GamePanel extends JPanel {
         // 4. Setup HUD Layar
         setupHUD();
 
+        // --- FITUR BARU: Setup overlay Game Over (Menang/Kalah) -- ditaruh paling atas (index 0)
+        // supaya selalu menutupi HUD/menu lain begitu ditampilkan. ---
+        gameOverPanel = new GameOverPanel(
+                () -> { // "Main Lagi" -> restart campaign dari awal dengan difficulty yang sama
+                    resetCampaign(window.selectedDifficulty);
+                },
+                () -> { // "Kembali ke Menu" -> balik ke Main Menu
+                    isGameOver = false;
+                    gameOverPanel.hideResult();
+                    window.showScreen("MENU_SCREEN");
+                }
+        );
+        add(gameOverPanel, 0);
+
         // 5. Jaga posisi HUD saat layar berubah ukuran
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
                 int w = getWidth();
                 int h = getHeight();
+                if (gameOverPanel != null) gameOverPanel.setBounds(0, 0, w, h);
                 if(topRightBar != null && bottomLeftBar != null) {
                     topRightBar.setBounds(w - 830, 0, 830, 56);
                     menuBtn.setBounds(topRightBar.getWidth() - 40, 4, 32, 32);
@@ -595,6 +706,7 @@ public class GamePanel extends JPanel {
                     bottomLeftBar.setBounds(15, h - 310, 180, 80);
                     if (gridMenuPanel != null) gridMenuPanel.setBounds(230, h - 200, 240, 180);
                     if (barrackQueuePanel != null) barrackQueuePanel.setBounds(475, h - 200, 180, 180);
+                    if (buildingInfoPanel != null) buildingInfoPanel.setBounds(475, h - 200, 180, 180);
                     if (devPanel != null) devPanel.setBounds(w / 2 - 270, h / 2 - 230, 540, 460);
                 }
             }
@@ -914,8 +1026,127 @@ public class GamePanel extends JPanel {
         barrackQueuePanel.setVisible(false);
         barrackQueuePanel.setOpaque(false);
 
-        add(topRightBar); add(gridMenuPanel); add(barrackQueuePanel); add(bottomLeftBar);
-        setComponentZOrder(topRightBar, 0); setComponentZOrder(gridMenuPanel, 1); setComponentZOrder(barrackQueuePanel, 2); setComponentZOrder(bottomLeftBar, 3);
+        // --- FITUR BARU: PANEL INFO IDENTITAS BANGUNAN (HP + data spesifik per tipe) ---
+        // Gaya & posisi sengaja disamakan persis dengan barrackQueuePanel (dark box + border emas)
+        // supaya konsisten -- keduanya gak pernah tampil bareng karena beda MenuState.
+        buildingInfoPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int w = getWidth(), h = getHeight();
+
+                g2d.setColor(new Color(25, 20, 18, 240));
+                g2d.fillRect(0, 0, w, h);
+                g2d.setColor(new Color(100, 75, 45));
+                g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRect(1, 1, w - 3, h - 3);
+
+                Building b = clickedBuilding;
+                if (b == null) { g2d.dispose(); return; }
+
+                // Judul: nama bangunan
+                g2d.setFont(new Font("Segoe UI Emoji", Font.BOLD, 11));
+                g2d.setColor(new Color(210, 190, 150));
+                g2d.drawString(buildingTypeLabel(b.type), 10, 18);
+
+                // --- HP BAR ---
+                g2d.setFont(new Font("Serif", Font.PLAIN, 10));
+                g2d.setColor(new Color(180, 160, 130));
+                String hpLabel = "HP: " + (int) Math.max(0, b.currentHp) + "/" + (int) b.maxHp;
+                g2d.drawString(hpLabel, 10, 34);
+
+                int barX = 10, barY = 38, barW = w - 20, barH = 9;
+                g2d.setColor(new Color(60, 0, 0));
+                g2d.fillRect(barX, barY, barW, barH);
+                double hpRatio = b.maxHp <= 0 ? 0 : Math.max(0, b.currentHp / b.maxHp);
+                g2d.setColor(new Color(90, 220, 90));
+                g2d.fillRect(barX, barY, (int) (barW * hpRatio), barH);
+                g2d.setColor(new Color(100, 75, 45));
+                g2d.drawRect(barX, barY, barW, barH);
+
+                int y = barY + barH + 16;
+
+                // --- STATUS (lagi dibangun / lagi dihancurkan) ---
+                if (!b.isBuilt) {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(200, 180, 120));
+                    int pct = (int) ((b.buildProgress / b.maxBuild) * 100);
+                    g2d.drawString("Sedang dibangun... " + pct + "%", 10, y);
+                    y += 16;
+                } else if (b.isDemolishing) {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(220, 100, 90));
+                    int pct = (int) ((b.demolishProgress / b.maxDemolish) * 100);
+                    g2d.drawString("Sedang dihancurkan... " + pct + "%", 10, y);
+                    y += 16;
+                }
+
+                // --- DATA SPESIFIK SESUAI TIPE BANGUNAN ---
+                boolean isHouse = b.type == Building.BuildingType.SMALL_HOUSE
+                        || b.type == Building.BuildingType.MEDIUM_HOUSE
+                        || b.type == Building.BuildingType.BIG_HOUSE;
+
+                if (isHouse) {
+                    g2d.setFont(new Font("Segoe UI Emoji", Font.BOLD, 11));
+                    g2d.setColor(new Color(210, 190, 150));
+                    g2d.drawString("Penghuni: " + b.occupants.size() + "/" + b.maxCapacity, 10, y);
+                    y += 14;
+
+                    // Ikon kecil tiap penghuni (gaya sama dengan icon "Waiting" di barrackQueuePanel)
+                    int iconX = 10, iconY = y, iconSize = 20;
+                    for (int i = 0; i < b.occupants.size(); i++) {
+                        if (civilImg != null) g2d.drawImage(civilImg, iconX, iconY, iconSize, iconSize, null);
+                        g2d.setColor(new Color(100, 75, 45));
+                        g2d.drawRect(iconX, iconY, iconSize, iconSize);
+                        iconX += iconSize + 4;
+                        if (iconX + iconSize > w - 10) { iconX = 10; iconY += iconSize + 4; }
+                    }
+                    if (b.occupants.isEmpty()) {
+                        g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                        g2d.setColor(new Color(150, 130, 100));
+                        g2d.drawString("(rumah kosong)", 10, y + 12);
+                    }
+                } else if (b.type == Building.BuildingType.BARRACK) {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(150, 130, 100));
+                    g2d.drawString("Tekan ➕ di menu untuk", 10, y);
+                    g2d.drawString("merekrut pasukan.", 10, y + 13);
+                } else if (b.type == Building.BuildingType.HEART) {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(150, 130, 100));
+                    g2d.drawString("Jantung Cryonia --", 10, y);
+                    g2d.drawString("jaga baik-baik!", 10, y + 13);
+                } else if (b.type == Building.BuildingType.FARM) {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(150, 130, 100));
+                    g2d.drawString("+5 Food tiap pagi", 10, y);
+                } else if (b.type == Building.BuildingType.STORAGE) {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(150, 130, 100));
+                    g2d.drawString("+25 kapasitas resource", 10, y);
+                } else if (b.type == Building.BuildingType.BUILDER) {
+                    long tukangCount = window.activeCivilBuilders.stream().filter(cb -> cb.homeBuilding == b).count();
+                    g2d.setFont(new Font("Segoe UI Emoji", Font.BOLD, 11));
+                    g2d.setColor(new Color(210, 190, 150));
+                    g2d.drawString("Tukang: " + tukangCount, 10, y);
+                } else {
+                    g2d.setFont(new Font("Serif", Font.ITALIC, 10));
+                    g2d.setColor(new Color(150, 130, 100));
+                    g2d.drawString("Dinding pertahanan", 10, y);
+                }
+
+                g2d.dispose();
+            }
+        };
+        buildingInfoPanel.setBounds(475, getHeight() - 200, 180, 180);
+        buildingInfoPanel.setVisible(false);
+        buildingInfoPanel.setOpaque(false);
+
+        add(topRightBar); add(gridMenuPanel); add(barrackQueuePanel); add(buildingInfoPanel); add(bottomLeftBar);
+        setComponentZOrder(topRightBar, 0); setComponentZOrder(gridMenuPanel, 1); setComponentZOrder(barrackQueuePanel, 2); setComponentZOrder(buildingInfoPanel, 3); setComponentZOrder(bottomLeftBar, 4);
+
 
         // --- FITUR BARU: INISIALISASI DEV PANEL ---
         devPanel = newDevPanel();
@@ -993,6 +1224,48 @@ public class GamePanel extends JPanel {
     private DevPanel newDevPanel() {
         return new DevPanel(resourceManager, window, camera, this::getWidth, this::getHeight,
                 () -> devPanelVisible = false);
+    }
+
+    // --- FITUR BARU: Trigger tampilan Game Over (Menang/Kalah) sekali begitu kondisinya terpenuhi.
+    // Semua keputusan KAPAN dipanggil ada di loop cameraTimer di atas; method ini murni menyusun
+    // ringkasan statistik & menampilkannya lewat GameOverPanel. ---
+    // --- FITUR BARU: Label nama bangunan yang enak dibaca buat panel info identitas bangunan ---
+    private String buildingTypeLabel(Building.BuildingType type) {
+        switch (type) {
+            case SMALL_HOUSE: return "Rumah Kecil";
+            case MEDIUM_HOUSE: return "Rumah Sedang";
+            case BIG_HOUSE: return "Rumah Besar";
+            case WALL_L: case WALL_R: case WALL_UD: return "Dinding";
+            case FARM: return "Farm";
+            case STORAGE: return "Storage";
+            case BARRACK: return "Barrack";
+            case HEART: return "Heart";
+            case BUILDER: return "Rumah Tukang";
+            default: return type.toString();
+        }
+    }
+
+    private void triggerGameOver(boolean won) {
+        isGameOver = true;
+
+        int wavesCleared = waveManager.getCurrentWaveIndex();
+        String waveLabel = wavesCleared <= 0
+                ? "-"
+                : WaveManager.WAVE_ROMAN[Math.min(wavesCleared, WaveManager.MAX_WAVE) - 1];
+
+        String[] statLines = {
+                "Hari bertahan: " + currentDay,
+                "Wave tercapai: " + waveLabel + " (" + wavesCleared + "/" + WaveManager.MAX_WAVE + ")",
+                "Wood terkumpul: " + resourceManager.wood + "/" + resourceManager.maxWood,
+                "Stone terkumpul: " + resourceManager.stone + "/" + resourceManager.maxStone,
+                "Steel terkumpul: " + resourceManager.steel + "/" + resourceManager.maxSteel,
+                "Food terkumpul: " + resourceManager.food + "/" + resourceManager.maxFood,
+                "Civil tersisa: " + window.activeCivils.size(),
+                "Guard tersisa: " + window.activeGuards.size(),
+                "Bangunan tersisa: " + window.savedBuildings.size()
+        };
+
+        gameOverPanel.showResult(won, statLines);
     }
 
     // --- DIEKSTRAK ke InGameMenu.java (ekstraksi #6, tidak ada perubahan logic/tampilan) ---
@@ -1125,6 +1398,9 @@ public class GamePanel extends JPanel {
         for (Projectile p : window.activeProjectiles) {
             p.draw(g2d);
         }
+
+        // --- FITUR BARU: particle hit-effect digambar paling atas biar gak ketiban unit lain ---
+        HitParticles.draw(g2d);
 
         // Render Preview Kursor (Dinamis Sesuai Tipe Bangunan)
         int bw = 90; // Default fallback

@@ -29,6 +29,10 @@ public class Horde implements Serializable {
     public double currentHp;
     public double attackDamage;
 
+    // --- FITUR BARU: FLASH PUTIH pas kena hit ---
+    public long lastHitTime = -999999;
+    private static final long HIT_FLASH_DURATION = 110; // ms
+
     // Atribut Pertarungan Lanjutan
     public long lastAttackTime = 0;
     public long attackCooldown = 1200; // Musuh memukul sedikit lebih lambat (1.2 detik)
@@ -123,38 +127,39 @@ public class Horde implements Serializable {
 
     // --- FITUR BARU: dipisah dari constructor supaya bisa dipanggil ulang pas Bear "ganti wujud" ---
     private void applyStatsForType() {
+        // --- FITUR BARU: SEMUA maxHp dikali 3 (buff ketebalan darah horde) ---
         if (this.type == HordeType.AXEMAN) {
-            this.maxHp = 80;
+            this.maxHp = 80 * 3;
             this.attackDamage = 10;
             this.speed = 1;
             this.attackCooldown = 1200;
         } else if (this.type == HordeType.SHIELDBEARER) {
-            this.maxHp = 150; // Darah paling tebal (Tank)
+            this.maxHp = 150 * 3; // Darah paling tebal (Tank)
             this.attackDamage = 5;
             this.speed = 0.7; // Paling lambat
             this.attackCooldown = 1200;
         } else if (this.type == HordeType.BOWMAN) {
-            this.maxHp = 50;  // Darah tipis
+            this.maxHp = 50 * 3;  // Darah tipis
             this.attackDamage = 15;
             this.speed = 1;
             this.attackCooldown = 1200;
         } else if (this.type == HordeType.BEAR) {
-            this.maxHp = 90;
+            this.maxHp = 90 * 3;
             this.attackDamage = 10;
             this.speed = 1.15; // Dikit lebih cepet dari Bowman
             this.attackCooldown = 1200;
         } else if (this.type == HordeType.TWO_AXE) {
-            this.maxHp = 80;
+            this.maxHp = 80 * 3;
             this.attackDamage = 10;
             this.speed = 0.8;
             this.attackCooldown = 700; // Lebih barbar -> mukul lebih sering
         } else if (this.type == HordeType.LOG) {
-            this.maxHp = 300; // Darah tebal banget
+            this.maxHp = 300 * 3; // Darah tebal banget
             this.attackDamage = 8;   // Ke Guard/Civil normal aja
             this.speed = 0.4;        // Lambat banget
             this.attackCooldown = 1800; // Ayunan berat, lama
         } else if (this.type == HordeType.SORCERER) {
-            this.maxHp = 35; // Tipis, support unit
+            this.maxHp = 35 * 3; // Tipis, support unit
             this.attackDamage = 0; // Gak nyerang langsung
             this.speed = 0.6;
             this.attackCooldown = 9999;
@@ -419,6 +424,8 @@ public class Horde implements Serializable {
                             // jadi biar Bowman tetap bisa "menembak" bangunan, damage-nya langsung dikenakan)
                             allProjectiles.add(new Projectile(x, y, targetX, targetY, false, 0));
                             targetBuilding.currentHp -= effectiveDamage;
+                            targetBuilding.lastHitTime = currentTime;
+                            HitParticles.burst(targetBuilding.getBounds().getCenterX(), targetBuilding.getBounds().getCenterY(), new Color(160, 140, 90), 5);
                         } else {
                             // BUAT PROYEKTIL BARU (false = dari horde, damage 15)
                             allProjectiles.add(new Projectile(x, y, targetX, targetY, false, effectiveDamage));
@@ -445,11 +452,16 @@ public class Horde implements Serializable {
                     if (currentTime - lastAttackTime >= attackCooldown) {
                         if (attackingCivil) {
                             targetCivil.currentHp -= effectiveDamage;
+                            HitParticles.burst(targetCivil.x + targetCivil.size / 2.0, targetCivil.y + targetCivil.size / 2.0, new Color(200, 30, 30), 6);
                         } else if (attackingBuilding) {
                             double dmg = effectiveDamage * (type == HordeType.LOG ? LOG_BUILDING_DAMAGE_MULTIPLIER : 1.0);
                             targetBuilding.currentHp -= dmg;
+                            targetBuilding.lastHitTime = currentTime;
+                            HitParticles.burst(targetBuilding.getBounds().getCenterX(), targetBuilding.getBounds().getCenterY(), new Color(160, 140, 90), 5);
                         } else {
                             targetGuard.currentHp -= effectiveDamage;
+                            targetGuard.lastHitTime = currentTime;
+                            HitParticles.burst(targetGuard.x + targetGuard.size / 2.0, targetGuard.y + targetGuard.size / 2.0, new Color(200, 30, 30), 6);
                         }
                         lastAttackTime = currentTime;
                     }
@@ -759,6 +771,17 @@ public class Horde implements Serializable {
                 g2d.setTransform(oldTransform);
             } else {
                 g2d.drawImage(img, drawX, drawY, vw, vh, null);
+            }
+
+            // --- FITUR BARU: FLASH PUTIH pas abis kena hit (fade out cepat) ---
+            long sinceHit = System.currentTimeMillis() - lastHitTime;
+            if (sinceHit >= 0 && sinceHit < HIT_FLASH_DURATION) {
+                float t = 1f - (float) sinceHit / HIT_FLASH_DURATION;
+                Composite oldComposite = g2d.getComposite();
+                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_ATOP, Math.min(1f, Math.max(0f, t))));
+                g2d.setColor(Color.WHITE);
+                g2d.fillRect(drawX, drawY, vw, vh);
+                g2d.setComposite(oldComposite);
             }
         } else {
             g2d.setColor(Color.RED);

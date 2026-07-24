@@ -12,7 +12,8 @@ public class Building implements Serializable {
     // --- FITUR BARU: TIPE BANGUNAN DINAMIS ---
     public enum BuildingType {
         SMALL_HOUSE, MEDIUM_HOUSE, BIG_HOUSE, WALL_L, WALL_R, WALL_UD,
-        FARM, STORAGE, BARRACK, HEART, BUILDER   // <-- tambah BUILDER
+        FARM, STORAGE, BARRACK, HEART, BUILDER,
+        ARCHER_TOWER   // <-- FITUR BARU: menara panah (cost wood+stone+civil, hancur -> 4 Guard Bow)
     }
     public BuildingType type;
 
@@ -29,6 +30,10 @@ public class Building implements Serializable {
     // --- FITUR BARU: DARAH BANGUNAN (biar bisa dihancurkan Horde) ---
     public double maxHp;
     public double currentHp;
+
+    // --- FITUR BARU: FLASH PUTIH pas Building kena hit ---
+    public long lastHitTime = -999999;
+    private static final long HIT_FLASH_DURATION = 110; // ms
 
     public Building(int x, int y, int width, int height, BuildingType type, int capacity) {
         this.bounds = new Rectangle(x, y, width, height);
@@ -82,6 +87,17 @@ public class Building implements Serializable {
                 }
 
                 g2d.drawImage(finishedImg, drawX, drawY, drawWidth, drawHeight, null);
+
+                // --- FITUR BARU: FLASH PUTIH pas abis kena hit (fade out cepat) ---
+                long sinceHit = System.currentTimeMillis() - lastHitTime;
+                if (sinceHit >= 0 && sinceHit < HIT_FLASH_DURATION) {
+                    float t = 1f - (float) sinceHit / HIT_FLASH_DURATION;
+                    Composite oldComposite = g2d.getComposite();
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_ATOP, Math.min(1f, Math.max(0f, t))));
+                    g2d.setColor(Color.WHITE);
+                    g2d.fillRect(drawX, drawY, drawWidth, drawHeight);
+                    g2d.setComposite(oldComposite);
+                }
             }
 
             // --- FITUR BARU: BAR DARAH BANGUNAN (cuma tampil kalau udah jadi & belum full darah) ---
@@ -133,6 +149,7 @@ public class Building implements Serializable {
         if (type == BuildingType.STORAGE) return 70; // Sesuaikan lebar storage.png
         if (type == BuildingType.BARRACK) return 114; // Sesuaikan lebar barrack.png
         if (type == BuildingType.BUILDER) return 35;   // di getVisualWidth
+        if (type == BuildingType.ARCHER_TOWER) return 70; // Scaled down dari archerTower.png asli (320x670)
 
         return 70;
     }
@@ -148,6 +165,7 @@ public class Building implements Serializable {
         if (type == BuildingType.STORAGE) return 45; // Sesuaikan tinggi storage.png
         if (type == BuildingType.BARRACK) return 71;
         if (type == BuildingType.BUILDER) return 35;   // di getVisualHeight
+        if (type == BuildingType.ARCHER_TOWER) return 145; // Scaled down dari archerTower.png asli (320x670)
         return 70;
     }
 
@@ -163,8 +181,23 @@ public class Building implements Serializable {
         if (type == BuildingType.STORAGE) return 5;
         if (type == BuildingType.BARRACK) return 20;
         if (type == BuildingType.BUILDER) return 25;
+        if (type == BuildingType.ARCHER_TOWER) return 12;
 
         return 0; // Default (contoh: Heart) gratis
+    }
+
+    // --- FITUR BARU: BIAYA STONE (dulunya cuma ada wood cost). Default 0 buat tipe yang gak butuh stone. ---
+    public static int getStoneCost(BuildingType type) {
+        if (type == BuildingType.ARCHER_TOWER) return 6;
+        return 0;
+    }
+
+    // --- FITUR BARU: BIAYA CIVIL (jumlah civil yang harus "dikorbankan"/dipakai buat bangun).
+    // CATATAN: pengurangan civil-nya sendiri (activeCivils di GameWindow) HARUS diwire di GamePanel
+    // pas tombol build ditekan -- di sini cuma data costnya. ---
+    public static int getCivilCost(BuildingType type) {
+        if (type == BuildingType.ARCHER_TOWER) return 4;
+        return 0;
     }
 
     // --- FITUR BARU: DARAH MAKSIMAL SESUAI TIPE BANGUNAN ---
@@ -178,6 +211,7 @@ public class Building implements Serializable {
         if (type == BuildingType.STORAGE) return 70;
         if (type == BuildingType.BARRACK) return 120;
         if (type == BuildingType.BUILDER) return 70;
+        if (type == BuildingType.ARCHER_TOWER) return 140;
         return 100;
     }
 

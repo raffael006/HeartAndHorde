@@ -357,7 +357,11 @@ public class InputController {
                                 } else {
                                     for (int i = 0; i < cap; i++) {
                                         // --- FITUR BARU: Civil dikasih tau rumah asalnya (newBuilding) biar bisa kabur pulang ---
-                                        gp.window.activeCivils.add(new Civil(spawnPointX, spawnPointY, newBuilding));
+                                        Civil newCivil = new Civil(spawnPointX, spawnPointY, newBuilding);
+                                        gp.window.activeCivils.add(newCivil);
+                                        // --- FITUR BARU: daftarkan Civil ini sebagai penghuni resmi rumahnya
+                                        // (dipakai buat cek slot kosong pas regenerasi tiap pagi & panel info bangunan) ---
+                                        newBuilding.enterBuilding(newCivil);
                                     }
                                 }
                             }
@@ -471,6 +475,19 @@ public class InputController {
 
     public void updateGridMenu() {
         gp.gridMenuPanel.removeAll();
+
+        // --- FITUR BARU: PANEL INFO IDENTITAS BANGUNAN ---
+        // Tampil setiap kali ada bangunan yang lagi dipilih (BUILDING_SELECTED), gaya & slotnya
+        // persis barrackQueuePanel -- makanya keduanya otomatis gak akan pernah tabrakan tampil
+        // bareng (beda MenuState: BUILDING_SELECTED vs BARRACK_MENU).
+        if (gp.buildingInfoPanel != null) {
+            boolean showInfo = gp.currentMenuState == GamePanel.MenuState.BUILDING_SELECTED && gp.clickedBuilding != null;
+            gp.buildingInfoPanel.setVisible(showInfo);
+            if (showInfo) {
+                gp.buildingInfoPanel.repaint();
+                if (gp.barrackQueuePanel != null) gp.barrackQueuePanel.setVisible(false);
+            }
+        }
 
         if (gp.currentMenuState == GamePanel.MenuState.MAIN_MENU) {
             gp.gridMenuPanel.add(gp.createGridBtn("👨‍🌾", () -> { gp.currentMenuState = GamePanel.MenuState.CIVIL_MENU; updateGridMenu(); }, false));
@@ -600,7 +617,9 @@ public class InputController {
                 if (gp.clickedBuilding != null) {
                     // --- FITUR BARU: Butuh 1 Civil untuk direkrut jadi Guard ---
                     if (!gp.window.activeCivils.isEmpty()) {
-                        gp.window.activeCivils.remove(gp.window.activeCivils.size() - 1); // Kurangi 1 civil
+                        Civil recruited = gp.window.activeCivils.remove(gp.window.activeCivils.size() - 1); // Kurangi 1 civil
+                        // --- FITUR BARU: lepaskan slot rumah asalnya, biar bisa keisi lagi pas regenerasi pagi ---
+                        if (recruited.homeBuilding != null) recruited.homeBuilding.exitBuilding(recruited);
                         gp.barrackQueues.computeIfAbsent(gp.clickedBuilding, k -> new java.util.LinkedList<>())
                                 .add(Guard.GuardType.SPEARMAN);
                         if (gp.barrackQueuePanel != null) gp.barrackQueuePanel.repaint();
@@ -614,7 +633,9 @@ public class InputController {
                 if (gp.clickedBuilding != null) {
                     // --- FITUR BARU: Butuh 1 Civil untuk direkrut jadi Guard ---
                     if (!gp.window.activeCivils.isEmpty()) {
-                        gp.window.activeCivils.remove(gp.window.activeCivils.size() - 1); // Kurangi 1 civil
+                        Civil recruited = gp.window.activeCivils.remove(gp.window.activeCivils.size() - 1); // Kurangi 1 civil
+                        // --- FITUR BARU: lepaskan slot rumah asalnya, biar bisa keisi lagi pas regenerasi pagi ---
+                        if (recruited.homeBuilding != null) recruited.homeBuilding.exitBuilding(recruited);
                         gp.barrackQueues.computeIfAbsent(gp.clickedBuilding, k -> new java.util.LinkedList<>())
                                 .add(Guard.GuardType.ARCHER);
                         if (gp.barrackQueuePanel != null) gp.barrackQueuePanel.repaint();
